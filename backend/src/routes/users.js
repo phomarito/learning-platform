@@ -67,6 +67,39 @@ router.get('/', auth, isAdmin, async (req, res, next) => {
 });
 
 /**
+ * GET /api/users/list
+ * Get all users (for chat purposes - accessible to all authenticated users)
+ */
+router.get('/list', auth, async (req, res, next) => {
+    try {
+        const users = await prisma.user.findMany({
+            where: {
+                id: {
+                    not: req.user.id // исключаем текущего пользователя
+                }
+            },
+            select: {
+                id: true,
+                email: true,
+                name: true,
+                role: true,
+                avatar: true
+            },
+            orderBy: {
+                name: 'asc'
+            }
+        });
+
+        res.json({
+            success: true,
+            data: users
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
  * GET /api/users/:id
  * Get user by ID (Admin only)
  */

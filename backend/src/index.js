@@ -2,8 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const { createServer } = require('http');
-const { Server } = require('socket.io');
+const cookieParser = require('cookie-parser'); // ← ДОБАВЬТЕ ЭТОТ ПАКЕТ
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -14,31 +13,30 @@ const progressRoutes = require('./routes/progress');
 const chatRoutes = require('./routes/chat');
 
 const app = express();
-const httpServer = createServer(app);
 
-// Socket.io setup
-const io = new Server(httpServer, {
-  cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-    methods: ['GET', 'POST']
-  }
-});
-
-// Middleware
-app.use(helmet());
+// ========== CORS с поддержкой cookies ==========
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true
+  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  credentials: true, // ← ВАЖНО для cookies
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+
+// ========== Другие middleware ==========
+app.use(helmet({
+  crossOriginResourcePolicy: false
+}));
+app.use(cookieParser()); // ← ДОБАВЬТЕ ЗДЕСЬ
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Make io available to routes
-app.set('io', io);
-
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    message: 'Server is running'
+  });
 });
 
 // API Routes
@@ -48,28 +46,6 @@ app.use('/api/courses', courseRoutes);
 app.use('/api/lessons', lessonRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/chat', chatRoutes);
-
-// Socket.io connection handling
-io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
-
-  socket.on('join-room', (roomId) => {
-    socket.join(roomId);
-    console.log(`User ${socket.id} joined room ${roomId}`);
-  });
-
-  socket.on('leave-room', (roomId) => {
-    socket.leave(roomId);
-  });
-
-  socket.on('chat-message', (data) => {
-    io.to(data.roomId).emit('new-message', data);
-  });
-
-  socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-  });
-});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -89,11 +65,12 @@ app.use((req, res) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 
-httpServer.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server running on PORT ${PORT}`);
+  console.log(`   Local: http://localhost:${PORT}`);
+  console.log(`   Network: http://127.0.0.1:${PORT}`);
+  console.log(`   Any: http://0.0.0.0:${PORT}`);
   console.log(`📝 Health check: http://localhost:${PORT}/health`);
 });
-
-module.exports = { app, io };

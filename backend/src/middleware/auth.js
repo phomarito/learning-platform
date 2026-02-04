@@ -4,6 +4,12 @@ const prisma = require('../config/database');
 /**
  * Authentication middleware - verifies JWT token
  */
+
+// app.use((req, res, next) => {
+//     console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
+//     next();
+// });
+
 const auth = async (req, res, next) => {
     try {
         const authHeader = req.headers.authorization;
