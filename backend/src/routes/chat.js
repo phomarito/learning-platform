@@ -16,7 +16,7 @@ router.get('/sessions', auth, async (req, res, next) => {
     try {
         const sessions = await prisma.chatSession.findMany({
             where: { 
-                userId: req.user.id 
+                userId: req.userId // ИСПРАВЛЕНО
             },
             orderBy: { updatedAt: 'desc' },
             include: {
@@ -53,7 +53,7 @@ router.post('/sessions', auth, async (req, res, next) => {
         
         const session = await prisma.chatSession.create({
             data: {
-                userId: req.user.id,
+                userId: req.userId, // ИСПРАВЛЕНО
                 title: title || 'Новый чат',
                 context: context || 'general'
             }
@@ -81,7 +81,7 @@ router.get('/sessions/:sessionId', auth, async (req, res, next) => {
         const session = await prisma.chatSession.findUnique({
             where: { 
                 id: sessionId,
-                userId: req.user.id // Security check
+                userId: req.userId // ИСПРАВЛЕНО
             },
             include: {
                 messages: {
@@ -122,7 +122,7 @@ router.post('/sessions/:sessionId/messages', auth, async (req, res, next) => {
         const session = await prisma.chatSession.findUnique({
             where: { 
                 id: sessionId,
-                userId: req.user.id
+                userId: req.userId // ИСПРАВЛЕНО
             }
         });
 
@@ -139,8 +139,8 @@ router.post('/sessions/:sessionId/messages', auth, async (req, res, next) => {
                 sessionId,
                 content,
                 type,
-                senderId: String(req.user.id),
-                userId: req.user.id,
+                senderId: String(req.userId), // ИСПРАВЛЕНО
+                userId: req.userId, // ИСПРАВЛЕНО
                 metadata: metadata || {}
             }
         });
@@ -153,7 +153,7 @@ router.post('/sessions/:sessionId/messages', auth, async (req, res, next) => {
 
         // Generate AI response (placeholder)
         const aiResponse = await generateAIResponse(content, {
-            userId: req.user.id,
+            userId: req.userId, // ИСПРАВЛЕНО
             sessionId,
             context: session.context
         });
@@ -206,7 +206,7 @@ router.delete('/sessions/:sessionId', auth, async (req, res, next) => {
         await prisma.chatSession.delete({
             where: { 
                 id: sessionId,
-                userId: req.user.id
+                userId: req.userId // ИСПРАВЛЕНО
             }
         });
 
@@ -232,7 +232,7 @@ router.get('/user', auth, async (req, res, next) => {
             where: {
                 participants: {
                     some: {
-                        userId: req.user.id
+                        userId: req.userId // ИСПРАВЛЕНО
                     }
                 }
             },
@@ -317,7 +317,7 @@ router.post('/', auth, async (req, res, next) => {
                 participants: {
                     create: [
                         // Add creator
-                        { userId: req.user.id },
+                        { userId: req.userId }, // ИСПРАВЛЕНО
                         // Add other participants if any
                         ...(participantIds || []).map(id => ({
                             userId: id
@@ -369,7 +369,7 @@ router.get('/:id', auth, async (req, res, next) => {
             const session = await prisma.chatSession.findUnique({
                 where: { 
                     id: sessionId,
-                    userId: req.user.id
+                    userId: req.userId // ИСПРАВЛЕНО
                 },
                 include: {
                     messages: {
@@ -438,7 +438,7 @@ router.get('/:id', auth, async (req, res, next) => {
         }
 
         // Check if user is a participant
-        const isParticipant = chat.participants.some(p => p.userId === req.user.id);
+        const isParticipant = chat.participants.some(p => p.userId === req.userId); // ИСПРАВЛЕНО
         if (!isParticipant) {
             return res.status(403).json({
                 success: false,
@@ -480,7 +480,7 @@ router.get('/:id/messages', auth, async (req, res, next) => {
             const session = await prisma.chatSession.findUnique({
                 where: { 
                     id: sessionId,
-                    userId: req.user.id
+                    userId: req.userId // ИСПРАВЛЕНО
                 }
             });
 
@@ -543,7 +543,7 @@ router.get('/:id/messages', auth, async (req, res, next) => {
             });
         }
 
-        const isParticipant = chat.participants.some(p => p.userId === req.user.id);
+        const isParticipant = chat.participants.some(p => p.userId === req.userId); // ИСПРАВЛЕНО
         if (!isParticipant) {
             return res.status(403).json({
                 success: false,
@@ -592,7 +592,6 @@ router.get('/:id/messages', auth, async (req, res, next) => {
     }
 });
 
-
 /**
  * POST /api/chat/:id/messages
  * Send message to chat (both AI and user chats)
@@ -602,7 +601,7 @@ router.post('/:id/messages', auth, async (req, res, next) => {
         const { id } = req.params;
         const { content, type = 'text', metadata } = req.body;
 
-        console.log('Sending message to chat:', { id, content, userId: req.user.id });
+        console.log('Sending message to chat:', { id, content, userId: req.userId });
 
         // Check if it's an AI chat
         if (id.startsWith('ai-')) {
@@ -611,7 +610,7 @@ router.post('/:id/messages', auth, async (req, res, next) => {
             const session = await prisma.chatSession.findUnique({
                 where: { 
                     id: sessionId,
-                    userId: req.user.id
+                    userId: req.userId // ИСПРАВЛЕНО
                 }
             });
 
@@ -628,8 +627,8 @@ router.post('/:id/messages', auth, async (req, res, next) => {
                     sessionId,
                     content,
                     type,
-                    senderId: String(req.user.id),
-                    userId: req.user.id,
+                    senderId: String(req.userId), // ИСПРАВЛЕНО
+                    userId: req.userId, // ИСПРАВЛЕНО
                     metadata: metadata || {}
                 },
                 include: {
@@ -653,7 +652,7 @@ router.post('/:id/messages', auth, async (req, res, next) => {
 
             // 3. Generate AI response (placeholder)
             const aiResponse = await generateAIResponse(content, {
-                userId: req.user.id,
+                userId: req.userId, // ИСПРАВЛЕНО
                 sessionId,
                 context: session.context
             });
@@ -699,10 +698,13 @@ router.post('/:id/messages', auth, async (req, res, next) => {
             };
 
             // 6. Socket.io broadcast
-            const io = req.app.get('io');
             if (io) {
-                io.to(`ai-session_${sessionId}`).emit('new-ai-message', formattedAiMessage);
-            }
+    const messageForSocket = {
+        ...formattedMessage,
+        tempId: req.body.tempId // Передаем tempId обратно
+    };
+    io.to(`chat_${id}`).emit('chat-message', messageForSocket);
+}
 
             return res.json({
                 success: true,
@@ -733,7 +735,7 @@ router.post('/:id/messages', auth, async (req, res, next) => {
             });
         }
 
-        const isParticipant = chat.participants.some(p => p.userId === req.user.id);
+        const isParticipant = chat.participants.some(p => p.userId === req.userId); // ИСПРАВЛЕНО
         if (!isParticipant) {
             return res.status(403).json({
                 success: false,
@@ -743,7 +745,7 @@ router.post('/:id/messages', auth, async (req, res, next) => {
 
         // 2. Get sender info
         const sender = await prisma.user.findUnique({
-            where: { id: req.user.id },
+            where: { id: req.userId }, // ИСПРАВЛЕНО
             select: { name: true, avatar: true }
         });
 
@@ -753,8 +755,8 @@ router.post('/:id/messages', auth, async (req, res, next) => {
                 chatId: id,
                 content,
                 type,
-                senderId: String(req.user.id),
-                userId: req.user.id,
+                senderId: String(req.userId), // ИСПРАВЛЕНО
+                userId: req.userId, // ИСПРАВЛЕНО
                 metadata: metadata || {}
             }
         });
@@ -800,10 +802,6 @@ router.post('/:id/messages', auth, async (req, res, next) => {
     }
 });
 
-// ... остальные функции (generateAIResponse, generateQuizQuestions и т.д.) остаются без изменений ...
-// Оставьте их как есть в конце файла
-
-
 /**
  * DELETE /api/chat/messages/:id
  * Delete message
@@ -812,26 +810,11 @@ router.delete('/messages/:id', auth, async (req, res, next) => {
     try {
         const { id } = req.params;
 
-        const message = await ChatMessage.findOne({
-            _id: id,
-            userId: req.user.id
-        });
-
-        if (!message) {
-            return res.status(404).json({
-                success: false,
-                message: 'Сообщение не найдено или нет прав для удаления'
-            });
-        }
-
-        // Soft delete - помечаем как удаленное
-        message.deletedAt = new Date();
-        message.deletedBy = req.user.id;
-        await message.save();
-
-        res.json({
-            success: true,
-            message: 'Сообщение удалено'
+        // NOTE: This function needs to be updated for Prisma
+        // For now, returning a placeholder response
+        res.status(501).json({
+            success: false,
+            message: 'Функционал удаления сообщений временно недоступен'
         });
     } catch (error) {
         next(error);
@@ -846,29 +829,11 @@ router.post('/messages/:id/read', auth, async (req, res, next) => {
     try {
         const { id } = req.params;
 
-        const message = await ChatMessage.findById(id);
-        if (!message) {
-            return res.status(404).json({
-                success: false,
-                message: 'Сообщение не найдено'
-            });
-        }
-
-        // Обновляем статус сообщения
-        message.status = 'read';
-        await message.save();
-
-        // Если это сообщение в чате, обновляем счетчик непрочитанных
-        if (message.chatId) {
-            await Chat.updateOne(
-                { _id: message.chatId },
-                { $set: { [`unreadCounts.${req.user.id}`]: 0 } }
-            );
-        }
-
-        res.json({
-            success: true,
-            message: 'Сообщение помечено как прочитанное'
+        // NOTE: This function needs to be updated for Prisma
+        // For now, returning a placeholder response
+        res.status(501).json({
+            success: false,
+            message: 'Функционал отметки сообщений как прочитанных временно недоступен'
         });
     } catch (error) {
         next(error);
@@ -884,7 +849,7 @@ router.get('/users', auth, async (req, res, next) => {
         const users = await prisma.user.findMany({
             where: {
                 id: {
-                    not: req.user.id
+                    not: req.userId // ИСПРАВЛЕНО
                 }
             },
             select: {
@@ -908,7 +873,6 @@ router.get('/users', auth, async (req, res, next) => {
     }
 });
 
-
 /**
  * GET /api/chat/chat/:id
  * Get chat details (alternate endpoint)
@@ -923,7 +887,7 @@ router.get('/chat/:id', auth, async (req, res, next) => {
             const session = await prisma.chatSession.findUnique({
                 where: { 
                     id: sessionId,
-                    userId: req.user.id
+                    userId: req.userId // ИСПРАВЛЕНО
                 },
                 include: {
                     messages: {
@@ -992,7 +956,7 @@ router.get('/chat/:id', auth, async (req, res, next) => {
         }
 
         // Check if user is a participant
-        const isParticipant = chat.participants.some(p => p.userId === req.user.id);
+        const isParticipant = chat.participants.some(p => p.userId === req.userId); // ИСПРАВЛЕНО
         if (!isParticipant) {
             return res.status(403).json({
                 success: false,

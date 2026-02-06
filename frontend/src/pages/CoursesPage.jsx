@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { coursesAPI } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import CourseCard from '../components/courses/CourseCard';
-import { Search, Filter, BookOpen, Plus } from 'lucide-react';
+import { Search, BookOpen, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const categories = [
@@ -18,65 +18,101 @@ export default function CoursesPage() {
     const { user } = useAuth();
     const navigate = useNavigate();
     
-    const [courses, setCourses] = useState([]);
+    const [allCourses, setAllCourses] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [search, setSearch] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('Все');
     const [showEnrolledOnly, setShowEnrolledOnly] = useState(false);
 
-    // Показывать "Только мои курсы" только студентам
-    const showEnrolledFilter = user?.role === 'STUDENT';
-    // Показывать кнопку создания курса только учителям и админам
-    const canCreateCourse = user?.role === 'TEACHER' || user?.role === 'ADMIN';
+    const isStudent = user?.role === 'STUDENT';
+    const isTeacher = user?.role === 'TEACHER';
+    const isAdmin = user?.role === 'ADMIN';
+    
+    // Для студентов всегда показываем только их курсы
+    // Учителям и админам показываем фильтр "Только мои курсы"
+    const showEnrolledFilter = !isStudent && (isTeacher || isAdmin);
+    const canCreateCourse = isTeacher || isAdmin;
 
     useEffect(() => {
         fetchCourses();
-    }, [selectedCategory, showEnrolledOnly]);
+    }, [selectedCategory, showEnrolledOnly, user?.role]);
 
-const fetchCourses = async () => {
-    try {
-        setIsLoading(true);
-        const params = {};
-        
-        if (selectedCategory !== 'Все') {
-            params.category = selectedCategory;
+    const fetchCourses = async () => {
+        try {
+            setIsLoading(true);
+            const params = {};
+            
+            if (selectedCategory !== 'Все') {
+                params.category = selectedCategory;
+            }
+            
+            // Для учителя - показываем только его курсы
+            if (isTeacher) {
+                params.teacher = user.id;
+            }
+            
+            const response = await coursesAPI.getAll(params);
+            let courses = response.data.data || [];
+            
+            // Обработка для разных ролей
+            if (isStudent) {
+                // Для студентов: показываем только курсы, на которые записаны
+                // Проверяем разные возможные поля
+                courses = courses.filter(course => {
+                    // Проверяем разные возможные названия полей
+                    return course.isEnrolled === true || 
+                           course.enrolled === true ||
+                           course.isStudentEnrolled === true ||
+                           (course.enrollments && course.enrollments.length > 0) ||
+                           (course.students && course.students.some(s => s.id === user.id));
+                });
+            } else if (showEnrolledOnly && (isTeacher || isAdmin)) {
+                // Для учителей и админов: фильтр "Только мои курсы"
+                // Для учителя это будут курсы, которые он создал
+                // Для админа можно показывать все или тоже фильтровать по каким-то критериям
+                if (isTeacher) {
+                    // Учитель уже видит только свои курсы (params.teacher = user.id)
+                    // Если нужно показать курсы, на которые учитель записан как студент
+                    // Нужно добавить дополнительную логику
+                }
+            }
+            
+            setAllCourses(courses);
+            
+        } catch (err) {
+            console.error('Error fetching courses:', err);
+            
+            // Более информативное сообщение об ошибке
+            if (err.response) {
+                setError(`Ошибка сервера: ${err.response.status} - ${err.response.data?.message || 'Неизвестная ошибка'}`);
+            } else if (err.request) {
+                setError('Нет ответа от сервера. Проверьте подключение.');
+            } else {
+                setError(`Ошибка: ${err.message}`);
+            }
+        } finally {
+            setIsLoading(false);
         }
-        
-        // Если студент и включен фильтр "Только мои курсы"
-        if (showEnrolledOnly && user?.role === 'STUDENT') {
-            params.enrolled = 'true';
-        }
-        
-        // Если учитель - показываем только его курсы
-        if (user?.role === 'TEACHER') {
-            params.teacher = user.id;
-        }
-        
-        // Если админ - показываем все курсы (без фильтра teacher)
-        // Для админа не применяем фильтр teacher, чтобы видеть все курсы
+    };
 
-        const response = await coursesAPI.getAll(params);
-        setCourses(response.data.data);
-    } catch (err) {
-        setError(err.response?.data?.message || 'Ошибка загрузки курсов');
-    } finally {
-        setIsLoading(false);
-    }
-};
-
-    const filteredCourses = courses.filter(course =>
-        course.title.toLowerCase().includes(search.toLowerCase()) ||
-        course.description?.toLowerCase().includes(search.toLowerCase())
-    );
-
+    // Фильтрация курсов по поиску
+    const filteredCourses = allCourses.filter(course => {
+        if (!course) return false;
+        
+        const titleMatch = course.title?.toLowerCase().includes(search.toLowerCase()) || false;
+        const descMatch = course.description?.toLowerCase().includes(search.toLowerCase()) || false;
+        
+        return titleMatch || descMatch;
+    });
 
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center py-16">
-                <div className="text-red-500 mb-4">⚠️</div>
-                <p className="text-gray-600">{error}</p>
-                <button onClick={fetchCourses} className="btn btn-primary mt-4">
+                <div className="text-red-500 mb-4 text-4xl">⚠️</div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Ошибка загрузки</h3>
+                <p className="text-gray-600 mb-4">{error}</p>
+                <button onClick={fetchCourses} className="btn btn-primary">
                     Попробовать снова
                 </button>
             </div>
@@ -90,27 +126,26 @@ const fetchCourses = async () => {
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Курсы</h1>
                     <p className="text-gray-600 mt-1">
-                        {user?.role === 'STUDENT' ? 'Выберите курс для изучения' : 
-                         user?.role === 'TEACHER' ? 'Управление вашими курсами' :
+                        {isStudent ? 'Ваши курсы для изучения' : 
+                         isTeacher ? 'Управление вашими курсами' :
                          'Управление всеми курсами'}
                     </p>
                 </div>
 
                 <div className="flex items-center gap-4">
-                    {/* Фильтр "Только мои курсы" только для студентов */}
+                    {/* Фильтр "Только мои курсы" для учителей и админов */}
                     {showEnrolledFilter && (
                         <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-                            <input
+                            {/* <input
                                 type="checkbox"
                                 checked={showEnrolledOnly}
                                 onChange={(e) => setShowEnrolledOnly(e.target.checked)}
                                 className="w-4 h-4 text-primary rounded focus:ring-primary"
-                            />
-                            Только мои курсы
+                            /> */}
+                            {/* {isTeacher ? 'Только мои курсы' : 'Только созданные мной'} */}
                         </label>
                     )}
 
-                    {/* Кнопка создания курса для учителей и админов */}
                     {canCreateCourse && (
                         <button 
                             onClick={() => navigate('/courses/create')}
@@ -142,12 +177,12 @@ const fetchCourses = async () => {
                             key={category}
                             onClick={() => setSelectedCategory(category)}
                             className={`
-                px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors
-                ${selectedCategory === category
+                                px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors
+                                ${selectedCategory === category
                                     ? 'bg-primary text-white'
                                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                 }
-              `}
+                            `}
                         >
                             {category}
                         </button>
@@ -158,7 +193,7 @@ const fetchCourses = async () => {
             {/* Courses Grid */}
             {isLoading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {[1, 2, 3, 4, 5, 6].map(i => (
+                    {[1, 2, 3].map(i => (
                         <div key={i} className="bg-white rounded-xl border border-gray-200 overflow-hidden animate-pulse">
                             <div className="h-40 bg-gray-200" />
                             <div className="p-5 space-y-3">
@@ -175,20 +210,43 @@ const fetchCourses = async () => {
                     <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
                         <BookOpen className="w-8 h-8 text-gray-400" />
                     </div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">Курсы не найдены</h3>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                        {isStudent ? 'У вас пока нет курсов' : 'Курсы не найдены'}
+                    </h3>
                     <p className="text-gray-600 max-w-md">
-                        {search || selectedCategory !== 'Все'
-                            ? 'Попробуйте изменить параметры поиска'
-                            : 'Пока нет доступных курсов'
+                        {isStudent 
+                            ? 'Обратитесь к учителю или администратору для записи на курс'
+                            : search || selectedCategory !== 'Все'
+                                ? 'Попробуйте изменить параметры поиска'
+                                : 'Пока нет доступных курсов. Создайте первый курс!'
                         }
                     </p>
+                    {!isStudent && canCreateCourse && (
+                        <button 
+                            onClick={() => navigate('/courses/create')}
+                            className="btn btn-primary mt-4"
+                        >
+                            Создать курс
+                        </button>
+                    )}
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredCourses.map(course => (
-                        <CourseCard key={course.id} course={course} />
-                    ))}
-                </div>
+                <>
+                    <div className="text-sm text-gray-600">
+                        Найдено курсов: {filteredCourses.length}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {filteredCourses.map(course => (
+                            <CourseCard 
+                                key={course.id} 
+                                course={course}
+                                // Для студентов скрываем кнопку записи
+                                hideEnrollButton={isStudent}
+                                onEnrollSuccess={fetchCourses} // Обновляем список после записи
+                            />
+                        ))}
+                    </div>
+                </>
             )}
         </div>
     );

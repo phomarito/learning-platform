@@ -1,42 +1,74 @@
 // frontend/src/api/client.js
 import axios from 'axios';
+import Cookies from 'js-cookie';
 
-// Создаем экземпляр axios с базовыми настройками
+// Создаем экземпляр axios с БОЛЬШИМ timeout
 const apiClient = axios.create({
   baseURL: 'http://localhost:3000/api',
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: true, // Для работы с cookies
+  withCredentials: true,
+  timeout: 30000, // 30 секунд
 });
 
-// Request interceptor для добавления токена
+// Request interceptor для отладки
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    console.log('📤 Making request to:', config.url);
+    console.log('🔧 Full config:', {
+      method: config.method,
+      url: config.url,
+      baseURL: config.baseURL,
+      withCredentials: config.withCredentials,
+      headers: config.headers,
+    });
+    
+    // Добавим отладочную информацию
+    console.log('🍪 Cookies:', document.cookie);
+    
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    console.error('❌ Request error:', error);
+    return Promise.reject(error);
+  }
 );
 
-// Response interceptor для обработки ошибок
+// Response interceptor для отладки
 apiClient.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
+  (response) => {
+    console.log('✅ Response from:', response.config.url, response.status);
+    console.log('📦 Response data:', response.data);
+    return response;
+  },
+  (error) => {
+    console.error('❌ Response error:', {
+      message: error.message,
+      code: error.code,
+      status: error.response?.status,
+      url: error.config?.url,
+      method: error.config?.method,
+      baseURL: error.config?.baseURL,
+      isNetworkError: !error.response, // Если нет response - это сетевой error
+    });
     
-    // Если 401 и это не запрос на обновление токена
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      
-      // Здесь можно добавить логику обновления токена
-      // Пока просто очищаем и редиректим
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+    // Для Network Error даем больше информации
+    if (!error.response) {
+      console.error('🌐 Network Error Details:', {
+        message: 'Не удалось подключиться к серверу',
+        possibleCauses: [
+          'Сервер не запущен',
+          'Порт неправильный',
+          'CORS блокировка',
+          'Проблема с сетью',
+        ],
+        check: [
+          '1. Проверьте запущен ли бэкенд на localhost:3000',
+          '2. Откройте http://localhost:3000/health в браузере',
+          '3. Проверьте консоль бэкенда на ошибки',
+        ]
+      });
     }
     
     return Promise.reject(error);
@@ -45,20 +77,27 @@ apiClient.interceptors.response.use(
 
 // ==================== АВТОРИЗАЦИЯ ====================
 export const authAPI = {
-  login: (email, password) =>
-    apiClient.post('/auth/login', { email, password }),
+  login: (email, password) => {
+    console.log('🔐 Login attempt for:', email);
+    return apiClient.post('/auth/login', { email, password });
+  },
     
   register: (data) => 
     apiClient.post('/auth/register', data),
     
-  getMe: () => 
-    apiClient.get('/auth/me'),
+  getMe: () => {
+    console.log('👤 Fetching current user...');
+    return apiClient.get('/auth/me');
+  },
     
   changePassword: (data) =>
     apiClient.put('/auth/password', data),
     
   logout: () => 
     apiClient.post('/auth/logout'),
+    
+  refresh: () =>
+    apiClient.post('/auth/refresh'),
 };
 
 // ==================== ПОЛЬЗОВАТЕЛИ ====================

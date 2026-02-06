@@ -1,65 +1,45 @@
+// backend/src/middleware/auth.js
 const jwt = require('jsonwebtoken');
-const prisma = require('../config/database');
 
-/**
- * Authentication middleware - verifies JWT token
- */
-
-// app.use((req, res, next) => {
-//     console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
-//     next();
-// });
-
-const auth = async (req, res, next) => {
-    try {
-        const authHeader = req.headers.authorization;
-
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return res.status(401).json({
-                success: false,
-                message: 'Требуется авторизация'
-            });
-        }
-
-        const token = authHeader.split(' ')[1];
-
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-        const user = await prisma.user.findUnique({
-            where: { id: decoded.userId },
-            select: {
-                id: true,
-                email: true,
-                name: true,
-                role: true,
-                avatar: true
-            }
-        });
-
-        if (!user) {
-            return res.status(401).json({
-                success: false,
-                message: 'Пользователь не найден'
-            });
-        }
-
-        req.user = user;
-        next();
-    } catch (error) {
-        if (error.name === 'JsonWebTokenError') {
-            return res.status(401).json({
-                success: false,
-                message: 'Некорректный токен'
-            });
-        }
-        if (error.name === 'TokenExpiredError') {
-            return res.status(401).json({
-                success: false,
-                message: 'Токен истёк'
-            });
-        }
-        next(error);
+module.exports = async function authMiddleware(req, res, next) {
+  try {
+    // Пробуем получить токен из кук
+    let token = req.cookies.token;
+    
+    // Если нет в куках, пробуем из заголовка Authorization
+    if (!token && req.headers.authorization) {
+      token = req.headers.authorization.replace('Bearer ', '');
     }
-};
+    
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: 'Требуется авторизация',
+      });
+    }
 
-module.exports = auth;
+    // Проверяем токен
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // Добавляем данные пользователя в запрос
+    req.userId = decoded.userId;
+    req.userRole = decoded.role;
+    
+    next();
+  } catch (error) {
+    console.error('Auth middleware error:', error.message);
+    
+    // Очищаем куку если токен невалидный
+    res.clearCookie('token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      path: '/',
+    });
+    
+    return res.status(401).json({
+      success: false,
+      message: 'Невалидный токен',
+    });
+  }
+};

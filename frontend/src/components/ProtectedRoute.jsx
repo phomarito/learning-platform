@@ -13,20 +13,28 @@ function LoadingSpinner() {
     );
 }
 
-// Protected route - requires authentication
-export function ProtectedRoute({ children }) {
-    const { isAuthenticated, isLoading } = useAuth();
-    const location = useLocation();
+// Main ProtectedRoute component
+export function ProtectedRoute({ children, requireAdmin = false }) {
+  const { user, isLoading, isAuthenticated } = useAuth();
+  const location = useLocation();
 
-    if (isLoading) {
-        return <LoadingSpinner />;
-    }
+  // Если загружаемся - показываем лоадер
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
 
-    if (!isAuthenticated) {
-        return <Navigate to="/login" state={{ from: location }} replace />;
-    }
+  // Если не авторизован - редирект на логин
+  if (!isAuthenticated) {
+    // Сохраняем путь для возврата после логина
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
 
-    return children;
+  // Если требуется админ, но пользователь не админ
+  if (requireAdmin && user?.role !== 'ADMIN') {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
 }
 
 // Admin only route
@@ -83,3 +91,6 @@ export function PublicRoute({ children }) {
 
     return children;
 }
+
+// Экспорт по умолчанию (для совместимости)
+export default ProtectedRoute;

@@ -122,7 +122,7 @@ router.post('/lesson-file', auth, isTeacher, upload.single('file'), async (req, 
         const fileUrl = `/uploads/${req.file.filename}`;
 
         res.json({
-            success: false,
+            success: true, // ИСПРАВЛЕНО: было false, должно быть true
             data: {
                 url: fileUrl,
                 filename: req.file.filename,

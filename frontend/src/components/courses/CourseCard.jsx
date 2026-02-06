@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { coursesAPI } from '../../api/client';
+import { toast } from 'react-hot-toast';
+import EnrollUsersModal from '../EnrollUsersModal';
 import {
     BookOpen,
     Users,
@@ -14,17 +16,30 @@ import {
     BarChart3
 } from 'lucide-react';
 
-export default function CourseCard({ course, onUpdate, onDelete }) {
+export default function CourseCard({ 
+    course, 
+    onUpdate, 
+    onDelete,
+    hideEnrollButton = false,
+    onEnrollSuccess
+}) {
     const { user } = useAuth();
     const navigate = useNavigate();
     const [isDeleting, setIsDeleting] = useState(false);
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [isEnrolling, setIsEnrolling] = useState(false);
+    const [enrollModalOpen, setEnrollModalOpen] = useState(false);
 
-    const canEdit = user?.role === 'ADMIN' || 
-                   (user?.role === 'TEACHER' && course.teacher?.id === user.id);
+    // Права доступа
+    const isAdmin = user?.role === 'ADMIN';
+    const isTeacher = user?.role === 'TEACHER';
+    const isStudent = user?.role === 'STUDENT';
+    const isCourseTeacher = course.teacher?.id === user?.id;
     
+    const canEdit = isAdmin || (isTeacher && isCourseTeacher);
     const canDelete = canEdit;
-    const canManageStudents = canEdit;
+    const canManageStudents = isAdmin || (isTeacher && isCourseTeacher);
+    const canEnroll = !hideEnrollButton && isStudent && !course.isEnrolled;
+    const canViewAnalytics = isAdmin || (isTeacher && isCourseTeacher);
 
     const handleEdit = (e) => {
         e.preventDefault();
@@ -33,78 +48,40 @@ export default function CourseCard({ course, onUpdate, onDelete }) {
     };
 
     const handleDelete = async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (!window.confirm('Вы уверены, что хотите удалить этот курс? Это действие нельзя отменить.')) {
-        return;
-    }
-
-    setIsDeleting(true);
-    try {
-        await coursesAPI.delete(course.id);
+        e.preventDefault();
+        e.stopPropagation();
         
-        // Вариант 1: Если используется callback от родителя
-        if (onDelete) {
-            onDelete(course.id); // Родительский компонент удалит из своего state
-        } 
-        // Вариант 2: Если вы в компоненте карточки и хотите скрыть сразу
-        else {
-            // Добавляем анимацию удаления
-            const cardElement = e.currentTarget.closest('[data-course-id]') || 
-                                e.currentTarget.closest('.course-card') ||
-                                document.getElementById(`course-${course.id}`);
-            
-            if (cardElement) {
-                // Добавляем класс для анимации
-                cardElement.style.opacity = '0';
-                cardElement.style.transform = 'scale(0.8)';
-                cardElement.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-                
-                // Удаляем после завершения анимации
-                setTimeout(() => {
-                    cardElement.remove();
-                    
-                    // Если нет карточек, показываем сообщение
-                    const container = document.querySelector('.courses-grid, .courses-list');
-                    if (container && container.children.length === 0) {
-                        const emptyMessage = document.createElement('div');
-                        emptyMessage.className = 'col-span-full text-center py-12';
-                        emptyMessage.innerHTML = `
-                            <div class="text-gray-400 mb-4">
-                                <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                            </div>
-                            <h3 class="text-lg font-medium text-gray-900 mb-2">Курсов не найдено</h3>
-                            <p class="text-gray-600">Начните с создания нового курса</p>
-                        `;
-                        container.appendChild(emptyMessage);
-                    }
-                }, 300);
-            }
+        if (!window.confirm('Вы уверены, что хотите удалить этот курс? Это действие нельзя отменить.')) {
+            return;
         }
-        
-        // Показываем уведомление об успехе
-        toast.success('Курс успешно удален');
-        
-    } catch (error) {
-        console.error('Error deleting course:', error);
-        const errorMessage = error.response?.data?.message || 
-                            error.response?.data?.error || 
-                            error.message || 
-                            'Неизвестная ошибка';
-        toast.error(`Ошибка при удалении курса: ${errorMessage}`);
-    } finally {
-        setIsDeleting(false);
-        setShowDeleteConfirm(false);
-    }
-};
+
+        setIsDeleting(true);
+        try {
+            await coursesAPI.delete(course.id);
+            
+            if (onDelete) {
+                onDelete(course.id);
+            }
+            
+            toast.success('Курс успешно удален');
+            
+        } catch (error) {
+            console.error('Error deleting course:', error);
+            const errorMessage = error.response?.data?.message || 
+                                error.response?.data?.error || 
+                                error.message || 
+                                'Неизвестная ошибка';
+            toast.error(`Ошибка при удалении курса: ${errorMessage}`);
+        } finally {
+            setIsDeleting(false);
+        }
+    };
 
     const handleManageStudents = (e) => {
         e.preventDefault();
         e.stopPropagation();
-        navigate(`/courses/${course.id}/students`);
+        // Открываем модальное окно для записи пользователей
+        setEnrollModalOpen(true);
     };
 
     const handleViewAnalytics = (e) => {
@@ -113,105 +90,172 @@ export default function CourseCard({ course, onUpdate, onDelete }) {
         navigate(`/courses/${course.id}/analytics`);
     };
 
+    const handleEnroll = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (!user || !isStudent) {
+            toast.error('Только студенты могут записываться на курсы');
+            return;
+        }
+
+        setIsEnrolling(true);
+        try {
+            await coursesAPI.enroll(course.id);
+            toast.success('Вы успешно записались на курс!');
+            
+            // Обновляем состояние
+            if (onEnrollSuccess) {
+                onEnrollSuccess();
+            }
+            
+            // Обновляем карточку
+            course.isEnrolled = true;
+            
+        } catch (error) {
+            console.error('Error enrolling:', error);
+            const errorMessage = error.response?.data?.message || 
+                                error.response?.data?.error || 
+                                error.message || 
+                                'Неизвестная ошибка';
+            toast.error(`Ошибка записи на курс: ${errorMessage}`);
+        } finally {
+            setIsEnrolling(false);
+        }
+    };
+
+    const handleCloseEnrollModal = () => {
+        setEnrollModalOpen(false);
+    };
+
+    const handleEnrollSuccess = () => {
+        if (onEnrollSuccess) {
+            onEnrollSuccess();
+        }
+        setEnrollModalOpen(false);
+        toast.success('Пользователи успешно записаны на курс!');
+    };
+
     return (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
-            {/* Обложка курса */}
-            <Link to={`/courses/${course.id}`} className="block">
-                <div className="h-40 bg-gradient-to-br from-primary/10 to-purple-100 relative">
-                    {course.coverImage ? (
-                        <img
-                            src={course.coverImage}
-                            alt={course.title}
-                            className="w-full h-full object-cover"
-                        />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                            <BookOpen className="w-12 h-12 text-gray-400" />
-                        </div>
-                    )}
-                    
-                    {/* Статус публикации */}
-                    {!course.isPublished && (
-                        <div className="absolute top-3 right-3 px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">
-                            Черновик
-                        </div>
-                    )}
-                </div>
-            </Link>
-
-            {/* Контент карточки */}
-            <div className="p-5">
-                {/* Заголовок и иконка */}
-                <div className="flex items-start gap-3 mb-3">
-                    <div className={`
-                        w-12 h-12 rounded-lg flex items-center justify-center text-2xl
-                        bg-gradient-to-br from-primary to-purple-600 text-white flex-shrink-0
-                    `}>
-                        {course.icon || '🎓'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <Link to={`/courses/${course.id}`} className="block">
-                            <h3 className="font-bold text-lg text-gray-900 truncate hover:text-primary transition-colors">
-                                {course.title}
-                            </h3>
-                        </Link>
-                        <p className="text-sm text-gray-500 mt-1">{course.category}</p>
-                    </div>
-                </div>
-
-                {/* Описание */}
-                <p className="text-gray-600 text-sm line-clamp-2 mb-4">
-                    {course.description}
-                </p>
-
-                {/* Статистика */}
-                <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
-                    <div className="flex items-center gap-4">
-                        <span className="flex items-center gap-1">
-                            <BookOpen className="w-4 h-4" />
-                            {course._count?.lessons || 0} уроков
-                        </span>
-                        <span className="flex items-center gap-1">
-                            <Users className="w-4 h-4" />
-                            {course._count?.enrollments || 0}
-                        </span>
-                        <span className="flex items-center gap-1">
-                            <Clock className="w-4 h-4" />
-                            {course.duration}
-                        </span>
-                    </div>
-                </div>
-
-                {/* Прогресс для студентов */}
-                {course.isEnrolled !== undefined && course.isEnrolled && course.progress !== undefined && (
-                    <div className="mb-4">
-                        <div className="flex justify-between text-sm text-gray-600 mb-1">
-                            <span>Ваш прогресс</span>
-                            <span>{course.progress}%</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                                className="bg-primary h-2 rounded-full transition-all duration-300"
-                                style={{ width: `${course.progress}%` }}
+        <>
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
+                {/* Обложка курса */}
+                <Link to={`/courses/${course.id}`} className="block">
+                    <div className="h-40 bg-gradient-to-br from-primary/10 to-purple-100 relative">
+                        {course.coverImage ? (
+                            <img
+                                src={course.coverImage}
+                                alt={course.title}
+                                className="w-full h-full object-cover"
                             />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                                <BookOpen className="w-12 h-12 text-gray-400" />
+                            </div>
+                        )}
+                        
+                        {/* Статус публикации */}
+                        {!course.isPublished && (
+                            <div className="absolute top-3 right-3 px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">
+                                Черновик
+                            </div>
+                        )}
+                    </div>
+                </Link>
+
+                {/* Контент карточки */}
+                <div className="p-5">
+                    {/* Заголовок и иконка */}
+                    <div className="flex items-start gap-3 mb-3">
+                        <div className={`
+                            w-12 h-12 rounded-lg flex items-center justify-center text-2xl
+                            bg-gradient-to-br from-primary to-purple-600 text-white flex-shrink-0
+                        `}>
+                            {course.icon || '🎓'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <Link to={`/courses/${course.id}`} className="block">
+                                <h3 className="font-bold text-lg text-gray-900 truncate hover:text-primary transition-colors">
+                                    {course.title}
+                                </h3>
+                            </Link>
+                            <p className="text-sm text-gray-500 mt-1">{course.category}</p>
                         </div>
                     </div>
-                )}
 
-                {/* Кнопки действий */}
-                <div className="flex gap-2">
-                    {/* Основная кнопка */}
-                    <Link
-                        to={`/courses/${course.id}`}
-                        className={`flex-1 btn ${course.isEnrolled ? 'btn-primary' : 'btn-outline'}`}
-                    >
-                        <Eye className="w-4 h-4 mr-2" />
-                        {course.isEnrolled ? 'Продолжить' : 'Подробнее'}
-                    </Link>
+                    {/* Описание */}
+                    <p className="text-gray-600 text-sm line-clamp-2 mb-4">
+                        {course.description}
+                    </p>
 
-                    {/* Дополнительные кнопки для преподавателей/админов */}
-                    {canEdit && (
-                        <>
+                    {/* Статистика */}
+                    <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
+                        <div className="flex items-center gap-4">
+                            <span className="flex items-center gap-1">
+                                <BookOpen className="w-4 h-4" />
+                                {course._count?.lessons || 0} уроков
+                            </span>
+                            <span className="flex items-center gap-1">
+                                <Users className="w-4 h-4" />
+                                {course._count?.enrollments || 0}
+                            </span>
+                            <span className="flex items-center gap-1">
+                                <Clock className="w-4 h-4" />
+                                {course.duration || '0 ч'}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Прогресс для студентов */}
+                    {course.isEnrolled && course.progress !== undefined && (
+                        <div className="mb-4">
+                            <div className="flex justify-between text-sm text-gray-600 mb-1">
+                                <span>Ваш прогресс</span>
+                                <span>{course.progress}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div
+                                    className="bg-primary h-2 rounded-full transition-all duration-300"
+                                    style={{ width: `${course.progress}%` }}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Кнопки действий */}
+                    <div className="flex flex-wrap gap-2">
+                        {/* Основная кнопка - Просмотр/Продолжить */}
+                        <Link
+                            to={`/courses/${course.id}`}
+                            className={`btn flex-1 min-w-[120px] ${course.isEnrolled ? 'btn-primary' : 'btn-outline'}`}
+                        >
+                            <Eye className="w-4 h-4 mr-2" />
+                            {course.isEnrolled ? 'Продолжить' : 'Подробнее'}
+                        </Link>
+
+                        {/* Кнопка записи для студентов */}
+                        {canEnroll && (
+                            <button
+                                onClick={handleEnroll}
+                                disabled={isEnrolling}
+                                className="btn btn-primary flex-1 min-w-[120px]"
+                            >
+                                {isEnrolling ? 'Записываемся...' : 'Записаться'}
+                            </button>
+                        )}
+
+                        {/* Кнопки управления для админов/учителей */}
+                        {canManageStudents && (
+                            <button
+                                onClick={handleManageStudents}
+                                className="p-2 border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
+                                title="Управление студентами"
+                            >
+                                <UserPlus className="w-4 h-4" />
+                            </button>
+                        )}
+                        
+                        {canEdit && (
                             <button
                                 onClick={handleEdit}
                                 className="p-2 border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
@@ -219,17 +263,9 @@ export default function CourseCard({ course, onUpdate, onDelete }) {
                             >
                                 <Edit className="w-4 h-4" />
                             </button>
-                            
-                            {canManageStudents && (
-                                <button
-                                    onClick={handleManageStudents}
-                                    className="p-2 border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
-                                    title="Управление студентами"
-                                >
-                                    <UserPlus className="w-4 h-4" />
-                                </button>
-                            )}
-                            
+                        )}
+                        
+                        {canViewAnalytics && (
                             <button
                                 onClick={handleViewAnalytics}
                                 className="p-2 border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
@@ -237,7 +273,9 @@ export default function CourseCard({ course, onUpdate, onDelete }) {
                             >
                                 <BarChart3 className="w-4 h-4" />
                             </button>
-                            
+                        )}
+                        
+                        {canDelete && (
                             <button
                                 onClick={handleDelete}
                                 disabled={isDeleting}
@@ -250,27 +288,37 @@ export default function CourseCard({ course, onUpdate, onDelete }) {
                                     <Trash2 className="w-4 h-4" />
                                 )}
                             </button>
-                        </>
-                    )}
-                </div>
-
-                {/* Преподаватель */}
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                    <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs">
-                            {course.teacher?.name?.[0] || 'П'}
-                        </div>
-                        <span className="text-sm text-gray-600">
-                            {course.teacher?.name || 'Преподаватель'}
-                        </span>
-                        {user?.id === course.teacher?.id && (
-                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
-                                Вы
-                            </span>
                         )}
+                    </div>
+
+                    {/* Преподаватель */}
+                    <div className="mt-4 pt-4 border-t border-gray-100">
+                        <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs">
+                                {course.teacher?.name?.[0] || course.teacher?.email?.[0] || 'П'}
+                            </div>
+                            <span className="text-sm text-gray-600">
+                                {course.teacher?.name || course.teacher?.email || 'Преподаватель'}
+                            </span>
+                            {user?.id === course.teacher?.id && (
+                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                                    Вы
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+
+            {/* Модальное окно для записи пользователей */}
+            {enrollModalOpen && (
+                <EnrollUsersModal
+                    courseId={course.id}
+                    isOpen={enrollModalOpen}
+                    onClose={handleCloseEnrollModal}
+                    onSuccess={handleEnrollSuccess}
+                />
+            )}
+        </>
     );
 }

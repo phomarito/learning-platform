@@ -1,17 +1,18 @@
+// backend/src/middleware/roleCheck.js
 /**
  * Role-based access control middleware
  * @param  {...string} roles - Allowed roles (ADMIN, TEACHER, STUDENT)
  */
 const roleCheck = (...roles) => {
     return (req, res, next) => {
-        if (!req.user) {
+        if (!req.userId) { // ИСПРАВЛЕНО: используем req.userId вместо req.user
             return res.status(401).json({
                 success: false,
                 message: 'Требуется авторизация'
             });
         }
 
-        if (!roles.includes(req.user.role)) {
+        if (!roles.includes(req.userRole)) { // ИСПРАВЛЕНО: используем req.userRole
             return res.status(403).json({
                 success: false,
                 message: 'Недостаточно прав для выполнения операции'

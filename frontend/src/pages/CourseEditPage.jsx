@@ -151,7 +151,7 @@ export default function CourseEditPage() {
                 <h1 className="text-2xl font-bold text-gray-900">Редактирование курса</h1>
                 <div className="flex items-center gap-3">
                     <button
-                        onClick={() => navigate(`/courses/${id}`)}
+                        onClick={() => navigate(-1)}
                         className="btn btn-outline"
                     >
                         <X className="w-4 h-4 mr-2" />

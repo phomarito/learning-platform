@@ -11,7 +11,7 @@ const router = express.Router();
 router.get('/', auth, async (req, res, next) => {
     try {
         const enrollments = await prisma.enrollment.findMany({
-            where: { userId: req.user.id },
+            where: { userId: req.userId }, // ИСПРАВЛЕНО: req.userId
             include: {
                 course: {
                     include: {
@@ -30,7 +30,7 @@ router.get('/', auth, async (req, res, next) => {
             enrollments.map(async (enrollment) => {
                 const completedLessons = await prisma.progress.count({
                     where: {
-                        userId: req.user.id,
+                        userId: req.userId, // ИСПРАВЛЕНО: req.userId
                         completed: true,
                         lesson: { courseId: enrollment.courseId }
                     }
@@ -38,7 +38,7 @@ router.get('/', auth, async (req, res, next) => {
 
                 const totalTimeSpent = await prisma.progress.aggregate({
                     where: {
-                        userId: req.user.id,
+                        userId: req.userId, // ИСПРАВЛЕНО: req.userId
                         lesson: { courseId: enrollment.courseId }
                     },
                     _sum: { timeSpent: true }
@@ -110,7 +110,7 @@ router.put('/:lessonId', auth, async (req, res, next) => {
         const enrollment = await prisma.enrollment.findUnique({
             where: {
                 userId_courseId: {
-                    userId: req.user.id,
+                    userId: req.userId, // ИСПРАВЛЕНО: req.userId
                     courseId: lesson.courseId
                 }
             }
@@ -126,12 +126,12 @@ router.put('/:lessonId', auth, async (req, res, next) => {
         const progress = await prisma.progress.upsert({
             where: {
                 userId_lessonId: {
-                    userId: req.user.id,
+                    userId: req.userId, // ИСПРАВЛЕНО: req.userId
                     lessonId
                 }
             },
             create: {
-                userId: req.user.id,
+                userId: req.userId, // ИСПРАВЛЕНО: req.userId
                 lessonId,
                 completed: completed || false,
                 completedAt: completed ? new Date() : null,
@@ -155,7 +155,7 @@ router.put('/:lessonId', auth, async (req, res, next) => {
         });
         const completedLessons = await prisma.progress.count({
             where: {
-                userId: req.user.id,
+                userId: req.userId, // ИСПРАВЛЕНО: req.userId
                 completed: true,
                 lesson: { courseId }
             }
@@ -168,7 +168,7 @@ router.put('/:lessonId', auth, async (req, res, next) => {
             const existingCertificate = await prisma.certificate.findUnique({
                 where: {
                     userId_courseId: {
-                        userId: req.user.id,
+                        userId: req.userId, // ИСПРАВЛЕНО: req.userId
                         courseId
                     }
                 }
@@ -177,7 +177,7 @@ router.put('/:lessonId', auth, async (req, res, next) => {
             if (!existingCertificate) {
                 certificate = await prisma.certificate.create({
                     data: {
-                        userId: req.user.id,
+                        userId: req.userId, // ИСПРАВЛЕНО: req.userId
                         courseId
                     }
                 });
@@ -210,7 +210,7 @@ router.put('/:lessonId', auth, async (req, res, next) => {
 router.get('/portfolio', auth, async (req, res, next) => {
     try {
         const certificates = await prisma.certificate.findMany({
-            where: { userId: req.user.id },
+            where: { userId: req.userId }, // ИСПРАВЛЕНО: req.userId
             include: {
                 course: {
                     select: {
@@ -229,7 +229,7 @@ router.get('/portfolio', auth, async (req, res, next) => {
 
         // Get overall stats
         const stats = await prisma.progress.aggregate({
-            where: { userId: req.user.id },
+            where: { userId: req.userId }, // ИСПРАВЛЕНО: req.userId
             _sum: { timeSpent: true },
             _count: { id: true }
         });

@@ -1,4 +1,3 @@
-// frontend/src/contexts/SocketContext.jsx
 import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
@@ -23,11 +22,9 @@ export function SocketProvider({ children }) {
 
         // Создаем подключение только если его еще нет
         if (!socketRef.current) {
-            const token = localStorage.getItem('token');
-            
             const newSocket = io('http://localhost:3000', {
                 transports: ['websocket', 'polling'],
-                auth: { token },
+                withCredentials: true, // Важно! Для отправки кук
                 reconnection: true,
                 reconnectionAttempts: 5,
                 reconnectionDelay: 1000,
@@ -65,17 +62,20 @@ export function SocketProvider({ children }) {
         };
     }, [isAuthenticated, user]);
 
-    const joinChat = (chatId) => {
-        if (socketRef.current && chatId) {
-            socketRef.current.emit('join-chat', chatId);
-        }
-    };
+    // В SocketContext.js добавьте логирование:
+const joinChat = (chatId) => {
+    if (socketRef.current && chatId) {
+        console.log('Joining chat room:', chatId);
+        socketRef.current.emit('join-chat', chatId);
+    }
+};
 
-    const joinSession = (sessionId) => {
-        if (socketRef.current && sessionId) {
-            socketRef.current.emit('join-session', sessionId);
-        }
-    };
+const joinSession = (sessionId) => {
+    if (socketRef.current && sessionId) {
+        console.log('Joining AI session room:', sessionId);
+        socketRef.current.emit('join-session', sessionId);
+    }
+};
 
     const value = {
         socket: socketRef.current,

@@ -38,14 +38,14 @@ router.get('/:id', auth, async (req, res, next) => {
         }
 
         // Check if user is enrolled or is teacher/admin
-        const isTeacherOrAdmin = req.user.role === 'ADMIN' ||
-            (req.user.role === 'TEACHER' && lesson.course.teacherId === req.user.id);
+        const isTeacherOrAdmin = req.userRole === 'ADMIN' || // ИСПРАВЛЕНО: req.userRole
+            (req.userRole === 'TEACHER' && lesson.course.teacherId === req.userId); // ИСПРАВЛЕНО: req.userId
 
         if (!isTeacherOrAdmin) {
             const enrollment = await prisma.enrollment.findUnique({
                 where: {
                     userId_courseId: {
-                        userId: req.user.id,
+                        userId: req.userId, // ИСПРАВЛЕНО: req.userId
                         courseId: lesson.course.id
                     }
                 }
@@ -63,7 +63,7 @@ router.get('/:id', auth, async (req, res, next) => {
         const progress = await prisma.progress.findUnique({
             where: {
                 userId_lessonId: {
-                    userId: req.user.id,
+                    userId: req.userId, // ИСПРАВЛЕНО: req.userId
                     lessonId
                 }
             }
@@ -122,7 +122,7 @@ router.post('/', auth, isTeacher, async (req, res, next) => {
         }
 
         // Check ownership (unless admin)
-        if (req.user.role !== 'ADMIN' && course.teacherId !== req.user.id) {
+        if (req.userRole !== 'ADMIN' && course.teacherId !== req.userId) { // ИСПРАВЛЕНО: req.userRole, req.userId
             return res.status(403).json({
                 success: false,
                 message: 'Нет прав на добавление уроков в этот курс'
@@ -185,7 +185,7 @@ router.put('/:id', auth, isTeacher, async (req, res, next) => {
         }
 
         // Check ownership (unless admin)
-        if (req.user.role !== 'ADMIN' && existingLesson.course.teacherId !== req.user.id) {
+        if (req.userRole !== 'ADMIN' && existingLesson.course.teacherId !== req.userId) { // ИСПРАВЛЕНО: req.userRole, req.userId
             return res.status(403).json({
                 success: false,
                 message: 'Нет прав на редактирование этого урока'
@@ -237,7 +237,7 @@ router.delete('/:id', auth, isTeacher, async (req, res, next) => {
         }
 
         // Check ownership (unless admin)
-        if (req.user.role !== 'ADMIN' && existingLesson.course.teacherId !== req.user.id) {
+        if (req.userRole !== 'ADMIN' && existingLesson.course.teacherId !== req.userId) { // ИСПРАВЛЕНО: req.userRole, req.userId
             return res.status(403).json({
                 success: false,
                 message: 'Нет прав на удаление этого урока'

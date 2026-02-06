@@ -75,7 +75,7 @@ router.get('/list', auth, async (req, res, next) => {
         const users = await prisma.user.findMany({
             where: {
                 id: {
-                    not: req.user.id // исключаем текущего пользователя
+                    not: req.userId // ИСПРАВЛЕНО: используем req.userId вместо req.user.id
                 }
             },
             select: {
@@ -272,7 +272,8 @@ router.delete('/:id', auth, isAdmin, async (req, res, next) => {
     try {
         const userId = parseInt(req.params.id);
 
-        if (userId === req.user.id) {
+        // ИСПРАВЛЕНО: сравниваем с req.userId вместо req.user.id
+        if (userId === req.userId) {
             return res.status(400).json({
                 success: false,
                 message: 'Невозможно удалить свой аккаунт'

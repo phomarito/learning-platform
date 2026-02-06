@@ -18,13 +18,13 @@ router.get('/', auth, async (req, res, next) => {
         };
 
         // Admin and Teacher can see unpublished courses
-        if (req.user.role === 'ADMIN' || req.user.role === 'TEACHER') {
+        if (req.userRole === 'ADMIN' || req.userRole === 'TEACHER') { // <- ИСПРАВЛЕНО
             delete where.isPublished;
         }
 
         // Teacher sees only their courses
-        if (req.user.role === 'TEACHER') {
-            where.teacherId = req.user.id;
+        if (req.userRole === 'TEACHER') { // <- ИСПРАВЛЕНО
+            where.teacherId = req.userId; // <- ИСПРАВЛЕНО
         }
 
         if (category) {
@@ -41,7 +41,7 @@ router.get('/', auth, async (req, res, next) => {
         // Filter by enrolled courses for current user
         if (enrolled === 'true') {
             where.enrollments = {
-                some: { userId: req.user.id }
+                some: { userId: req.userId } // <- ИСПРАВЛЕНО
             };
         }
 
@@ -56,7 +56,7 @@ router.get('/', auth, async (req, res, next) => {
                         select: { lessons: true, enrollments: true }
                     },
                     enrollments: {
-                        where: { userId: req.user.id },
+                        where: { userId: req.userId }, // <- ИСПРАВЛЕНО
                         select: { id: true }
                     }
                 },
@@ -76,7 +76,7 @@ router.get('/', auth, async (req, res, next) => {
                 if (totalLessons > 0 && course.enrollments.length > 0) {
                     const completedLessons = await prisma.progress.count({
                         where: {
-                            userId: req.user.id,
+                            userId: req.userId, // <- ИСПРАВЛЕНО
                             completed: true,
                             lesson: { courseId: course.id }
                         }
@@ -132,7 +132,7 @@ router.get('/:id', auth, async (req, res, next) => {
                     }
                 },
                 enrollments: {
-                    where: { userId: req.user.id },
+                    where: { userId: req.userId }, // <- ИСПРАВЛЕНО
                     select: { id: true }
                 },
                 _count: {
@@ -154,7 +154,7 @@ router.get('/:id', auth, async (req, res, next) => {
                 const progress = await prisma.progress.findUnique({
                     where: {
                         userId_lessonId: {
-                            userId: req.user.id,
+                            userId: req.userId, // <- ИСПРАВЛЕНО
                             lessonId: lesson.id
                         }
                     }
@@ -209,7 +209,7 @@ router.post('/', auth, isTeacher, async (req, res, next) => {
                 duration: duration || '30 мин',
                 icon,
                 coverImage,
-                teacherId: req.user.id
+                teacherId: req.userId // <- ИСПРАВЛЕНО
             },
             include: {
                 teacher: {
@@ -249,7 +249,7 @@ router.put('/:id', auth, isTeacher, async (req, res, next) => {
         }
 
         // Check ownership (unless admin)
-        if (req.user.role !== 'ADMIN' && existingCourse.teacherId !== req.user.id) {
+        if (req.userRole !== 'ADMIN' && existingCourse.teacherId !== req.userId) { // <- ИСПРАВЛЕНО
             return res.status(403).json({
                 success: false,
                 message: 'Нет прав на редактирование этого курса'
@@ -304,7 +304,7 @@ router.delete('/:id', auth, isTeacher, async (req, res, next) => {
         }
 
         // Check ownership (unless admin)
-        if (req.user.role !== 'ADMIN' && existingCourse.teacherId !== req.user.id) {
+        if (req.userRole !== 'ADMIN' && existingCourse.teacherId !== req.userId) { // <- ИСПРАВЛЕНО
             return res.status(403).json({
                 success: false,
                 message: 'Нет прав на удаление этого курса'
@@ -346,7 +346,7 @@ router.post('/:id/enroll', auth, async (req, res, next) => {
         const existingEnrollment = await prisma.enrollment.findUnique({
             where: {
                 userId_courseId: {
-                    userId: req.user.id,
+                    userId: req.userId, // <- ИСПРАВЛЕНО
                     courseId
                 }
             }
@@ -361,7 +361,7 @@ router.post('/:id/enroll', auth, async (req, res, next) => {
 
         const enrollment = await prisma.enrollment.create({
             data: {
-                userId: req.user.id,
+                userId: req.userId, // <- ИСПРАВЛЕНО
                 courseId
             }
         });
@@ -376,15 +376,13 @@ router.post('/:id/enroll', auth, async (req, res, next) => {
     }
 });
 
-/**
- * POST /api/courses/:id/students
- * Assign student to course (Teacher/Admin)
- */
+// --- Раздел для управления студентами курса ---
 // Получить всех студентов курса
 router.get('/:id/students', auth, async (req, res) => {
     try {
         const courseId = parseInt(req.params.id);
-        const currentUser = req.user;
+        const currentUserId = req.userId; // <- ИСПРАВЛЕНО
+        const currentUserRole = req.userRole; // <- ИСПРАВЛЕНО
 
         const course = await prisma.course.findUnique({
             where: { id: courseId }
@@ -398,7 +396,7 @@ router.get('/:id/students', auth, async (req, res) => {
         }
 
         // Проверяем права
-        if (currentUser.role !== 'ADMIN' && course.teacherId !== currentUser.id) {
+        if (currentUserRole !== 'ADMIN' && course.teacherId !== currentUserId) { // <- ИСПРАВЛЕНО
             return res.status(403).json({
                 success: false,
                 message: 'Нет прав на просмотр студентов этого курса'
@@ -483,7 +481,8 @@ router.post('/:id/students', auth, async (req, res) => {
     try {
         const courseId = parseInt(req.params.id);
         const { userId } = req.body;
-        const currentUser = req.user;
+        const currentUserId = req.userId; // <- ИСПРАВЛЕНО
+        const currentUserRole = req.userRole; // <- ИСПРАВЛЕНО
 
         const course = await prisma.course.findUnique({
             where: { id: courseId }
@@ -497,7 +496,7 @@ router.post('/:id/students', auth, async (req, res) => {
         }
 
         // Проверяем права
-        if (currentUser.role !== 'ADMIN' && course.teacherId !== currentUser.id) {
+        if (currentUserRole !== 'ADMIN' && course.teacherId !== currentUserId) { // <- ИСПРАВЛЕНО
             return res.status(403).json({
                 success: false,
                 message: 'Нет прав на добавление студентов в этот курс'
@@ -570,7 +569,8 @@ router.delete('/:id/students/:studentId', auth, async (req, res) => {
     try {
         const courseId = parseInt(req.params.id);
         const studentId = parseInt(req.params.studentId);
-        const currentUser = req.user;
+        const currentUserId = req.userId; // <- ИСПРАВЛЕНО
+        const currentUserRole = req.userRole; // <- ИСПРАВЛЕНО
 
         const course = await prisma.course.findUnique({
             where: { id: courseId }
@@ -584,7 +584,7 @@ router.delete('/:id/students/:studentId', auth, async (req, res) => {
         }
 
         // Проверяем права
-        if (currentUser.role !== 'ADMIN' && course.teacherId !== currentUser.id) {
+        if (currentUserRole !== 'ADMIN' && course.teacherId !== currentUserId) { // <- ИСПРАВЛЕНО
             return res.status(403).json({
                 success: false,
                 message: 'Нет прав на удаление студентов из этого курса'
@@ -642,7 +642,6 @@ router.delete('/:id/students/:studentId', auth, async (req, res) => {
     }
 });
 
-
 /**
  * GET /api/courses/teacher/:teacherId
  * Get courses by teacher (for admin dashboard)
@@ -684,7 +683,7 @@ router.get('/teacher/:teacherId', auth, async (req, res, next) => {
 
 /**
  * DELETE /api/courses/:id/students/:userId
- * Remove student from course (Teacher/Admin)
+ * Remove student from course (Teacher/Admin) - ВАЖНО: этот маршрут дублирует вышестоящий. Можно удалить один из них.
  */
 router.delete('/:id/students/:userId', auth, isTeacher, async (req, res, next) => {
     try {
@@ -703,7 +702,7 @@ router.delete('/:id/students/:userId', auth, isTeacher, async (req, res, next) =
         }
 
         // Check ownership (unless admin)
-        if (req.user.role !== 'ADMIN' && course.teacherId !== req.user.id) {
+        if (req.userRole !== 'ADMIN' && course.teacherId !== req.userId) { // <- ИСПРАВЛЕНО
             return res.status(403).json({
                 success: false,
                 message: 'Нет прав на управление этим курсом'
@@ -744,14 +743,14 @@ router.delete('/:id/students/:userId', auth, isTeacher, async (req, res, next) =
     }
 });
 
-// Добавить эти маршруты к существующим
-
+// --- Массовая запись и поиск пользователей ---
 // Записать пользователей на курс (массовая запись)
-router.post('/:id/enrollments/batch', auth, async (req, res) => { // ЗАМЕНИЛИ authMiddleware на auth
+router.post('/:id/enrollments/batch', auth, async (req, res) => {
     try {
         const courseId = parseInt(req.params.id);
         const { userIds } = req.body;
-        const currentUser = req.user;
+        const currentUserId = req.userId; // <- ИСПРАВЛЕНО
+        const currentUserRole = req.userRole; // <- ИСПРАВЛЕНО
 
         // Проверяем существование курса
         const course = await prisma.course.findUnique({
@@ -764,11 +763,11 @@ router.post('/:id/enrollments/batch', auth, async (req, res) => { // ЗАМЕН�
         }
 
         // Проверка прав
-        if (currentUser.role === 'ADMIN') {
+        if (currentUserRole === 'ADMIN') {
             // Админ может записывать всех
-        } else if (currentUser.role === 'TEACHER') {
+        } else if (currentUserRole === 'TEACHER') {
             // Преподаватель может записывать только на свои курсы
-            if (course.teacherId !== currentUser.id) {
+            if (course.teacherId !== currentUserId) { // <- ИСПРАВЛЕНО
                 return res.status(403).json({ error: 'Вы не можете записывать пользователей на этот курс' });
             }
             
@@ -862,10 +861,11 @@ router.post('/:id/enrollments/batch', auth, async (req, res) => { // ЗАМЕН�
 });
 
 // Получить пользователей для записи
-router.get('/:id/enrollable-users', auth, async (req, res) => { // ЗАМЕНИЛИ authMiddleware на auth
+router.get('/:id/enrollable-users', auth, async (req, res) => {
     try {
         const courseId = parseInt(req.params.id);
-        const currentUser = req.user;
+        const currentUserId = req.userId; // <- ИСПРАВЛЕНО
+        const currentUserRole = req.userRole; // <- ИСПРАВЛЕНО
         const { role } = req.query;
 
         const course = await prisma.course.findUnique({
@@ -882,13 +882,13 @@ router.get('/:id/enrollable-users', auth, async (req, res) => { // ЗАМЕНИ�
         // Определяем, каких пользователей можно показывать
         let whereCondition = {};
         
-        if (currentUser.role === 'ADMIN') {
+        if (currentUserRole === 'ADMIN') {
             // Админ видит всех, кроме себя
-            whereCondition.id = { not: currentUser.id };
+            whereCondition.id = { not: currentUserId }; // <- ИСПРАВЛЕНО
             if (role && role !== 'all') {
                 whereCondition.role = role.toUpperCase();
             }
-        } else if (currentUser.role === 'TEACHER') {
+        } else if (currentUserRole === 'TEACHER') {
             // Преподаватель видит только студентов
             whereCondition.role = 'STUDENT';
         } else {
@@ -964,7 +964,7 @@ router.get('/:id/analytics', auth, isTeacher, async (req, res, next) => {
         }
 
         // Check ownership (unless admin)
-        if (req.user.role !== 'ADMIN' && course.teacherId !== req.user.id) {
+        if (req.userRole !== 'ADMIN' && course.teacherId !== req.userId) { // <- ИСПРАВЛЕНО
             return res.status(403).json({
                 success: false,
                 message: 'Нет прав на просмотр аналитики этого курса'

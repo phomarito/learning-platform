@@ -11,19 +11,18 @@ import CoursesPage from './pages/CoursesPage';
 import CourseDetailPage from './pages/CourseDetailPage';
 import LessonPage from './pages/LessonPage';
 import ProfilePage from './pages/ProfilePage';
-import PortfolioPage from './pages/PortfolioPage'
-import NoticePage from './pages/NoticePage'
-import AdminUsersPage from './pages/AdminUsersPage'
-import CourseCreatePage from './pages/CourseCreatePage'
-import LessonCreatePage from './pages/LessonCreatePage'
-import ChatsPage from './pages/ChatsPage'
+import PortfolioPage from './pages/PortfolioPage';
+import NoticePage from './pages/NoticePage';
+import AdminUsersPage from './pages/AdminUsersPage';
+import CourseCreatePage from './pages/CourseCreatePage';
+import LessonCreatePage from './pages/LessonCreatePage';
+import ChatsPage from './pages/ChatsPage';
 import ChatPage from './pages/ChatPage';
 import CourseStudentsPage from './pages/CourseStudentsPage';
 import CourseAnalyticsPage from './pages/CourseAnalyticsPage';
 import CourseEditPage from './pages/CourseEditPage';
 
-
-import { lazy, Suspense } from 'react';
+import { Suspense } from 'react';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -48,100 +47,106 @@ function App() {
       <BrowserRouter>
         <AuthProvider>
           <SocketProvider>
-          <Suspense fallback={<LoadingFallback />}>
-            <Routes>
-              {/* Public routes */}
-              <Route
-                path="/login"
-                element={
-                  <PublicRoute>
-                    <LoginPage />
-                  </PublicRoute>
-                }
-              />
-
-              {/* Protected routes with dashboard layout */}
-              <Route
-                element={
-                  <ProtectedRoute>
-                    <DashboardLayout />
-                  </ProtectedRoute>
-                }
-              >
-                <Route path="/courses" element={<CoursesPage />} />
-                <Route path="/courses/:id" element={<CourseDetailPage />} />
-                <Route path="/profile" element={<ProfilePage />} />
-                <Route path="/notice" element={<NoticePage />} />
-                <Route path="/portfolio" element={<PortfolioPage />} />
-                <Route path="/chats" element={<ChatsPage />} />
-                <Route path="chat/:chatId" element={<ChatPage />} />
-
-                {/* Admin routes */}
+            <Suspense fallback={<LoadingFallback />}>
+              <Routes>
+                {/* Public routes */}
                 <Route
-                  path="/admin/users"
+                  path="/login"
                   element={
-                    <AdminRoute>
-                      <AdminUsersPage />
-                    </AdminRoute>
+                    <PublicRoute>
+                      <LoginPage />
+                    </PublicRoute>
                   }
                 />
-                <Route path="/courses/create" element={
-                  <ProtectedRoute allowedRoles={['ADMIN', 'TEACHER']}>
-                    <CourseCreatePage />
-                  </ProtectedRoute>
-                } />
 
-                <Route path="courses/:id/students" element={
-                  <ProtectedRoute requireTeacherOrAdmin>
-                      <CourseStudentsPage />
-                  </ProtectedRoute>
-              } />
-              <Route path="courses/:id/analytics" element={
-                  <ProtectedRoute requireTeacherOrAdmin>
-                      <CourseAnalyticsPage />
-                  </ProtectedRoute>
-              } />
-              <Route path="courses/:id/edit" element={
-                  <ProtectedRoute requireTeacherOrAdmin>
-                      <CourseEditPage />
-                  </ProtectedRoute>
-              } />
+                {/* Protected routes with dashboard layout */}
+                <Route
+                  element={
+                    <ProtectedRoute>
+                      <DashboardLayout />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route path="/courses" element={<CoursesPage />} />
+                  <Route path="/courses/:id" element={<CourseDetailPage />} />
+                  <Route path="/profile" element={<ProfilePage />} />
+                  <Route path="/notice" element={<NoticePage />} />
+                  <Route path="/portfolio" element={<PortfolioPage />} />
+                  <Route path="/chats" element={<ChatsPage />} />
+                  <Route path="/chat/:chatId" element={<ChatPage />} />
 
-              <Route path="courses/:id/edit" element={
-                  <ProtectedRoute requireTeacherOrAdmin>
-                      <LessonCreatePage />
-                  </ProtectedRoute>
-              } />
+                  {/* Admin routes */}
+                  <Route
+                    path="/admin/users"
+                    element={
+                      <AdminRoute>
+                        <AdminUsersPage />
+                      </AdminRoute>
+                    }
+                  />
 
-                <Route path="/courses/:courseId/lessons/create" element={
-                  <ProtectedRoute allowedRoles={['ADMIN', 'TEACHER']}>
-                    <LessonCreatePage />
-                  </ProtectedRoute>
-                } />
+                  <Route
+                    path="/courses/create"
+                    element={
+                      <TeacherRoute>
+                        <CourseCreatePage />
+                      </TeacherRoute>
+                    }
+                  />
 
-                {/* <Route path="/lessons/:id/edit" element={
-                  <ProtectedRoute allowedRoles={['ADMIN', 'TEACHER']}>
-                    <LessonEditPage />
-                  </ProtectedRoute>
-                } /> */}
+                  <Route
+                    path="/courses/:id/students"
+                    element={
+                      <TeacherRoute>
+                        <CourseStudentsPage />
+                      </TeacherRoute>
+                    }
+                  />
 
-              </Route>
+                  <Route
+                    path="/courses/:id/analytics"
+                    element={
+                      <TeacherRoute>
+                        <CourseAnalyticsPage />
+                      </TeacherRoute>
+                    }
+                  />
 
-              {/* Lesson page - full screen without sidebar */}
-              <Route
-                path="/lessons/:id"
-                element={
-                  <ProtectedRoute>
-                    <LessonPage />
-                  </ProtectedRoute>
-                }
-              />
+                  <Route
+                    path="/courses/:id/edit"
+                    element={
+                      <TeacherRoute>
+                        <CourseEditPage />
+                      </TeacherRoute>
+                    }
+                  />
 
-              {/* Redirects */}
-              <Route path="/" element={<Navigate to="/courses" replace />} />
-              <Route path="*" element={<Navigate to="/courses" replace />} />
-            </Routes>
-          </Suspense>
+                  <Route
+                    path="/courses/:courseId/lessons/create"
+                    element={
+                      <TeacherRoute>
+                        <LessonCreatePage />
+                      </TeacherRoute>
+                    }
+                  />
+
+                </Route>
+
+                {/* Lesson page - full screen without sidebar */}
+                <Route
+                  path="/lessons/:id"
+                  element={
+                    <ProtectedRoute>
+                      <LessonPage />
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Redirects */}
+                <Route path="/" element={<Navigate to="/courses" replace />} />
+                <Route path="*" element={<Navigate to="/courses" replace />} />
+              </Routes>
+            </Suspense>
           </SocketProvider>
         </AuthProvider>
       </BrowserRouter>
