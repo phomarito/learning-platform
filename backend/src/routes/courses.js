@@ -380,17 +380,316 @@ router.post('/:id/enroll', auth, async (req, res, next) => {
  * POST /api/courses/:id/students
  * Assign student to course (Teacher/Admin)
  */
-router.post('/:id/students', auth, isTeacher, async (req, res, next) => {
+// Получить всех студентов курса
+router.get('/:id/students', auth, async (req, res) => {
+    try {
+        const courseId = parseInt(req.params.id);
+        const currentUser = req.user;
+
+        const course = await prisma.course.findUnique({
+            where: { id: courseId }
+        });
+
+        if (!course) {
+            return res.status(404).json({
+                success: false,
+                message: 'Курс не найден'
+            });
+        }
+
+        // Проверяем права
+        if (currentUser.role !== 'ADMIN' && course.teacherId !== currentUser.id) {
+            return res.status(403).json({
+                success: false,
+                message: 'Нет прав на просмотр студентов этого курса'
+            });
+        }
+
+        // Получаем студентов курса с их прогрессом
+        const enrollments = await prisma.enrollment.findMany({
+            where: { 
+                courseId,
+                user: {
+                    role: 'STUDENT'
+                }
+            },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        email: true,
+                        name: true,
+                        avatar: true,
+                        createdAt: true
+                    }
+                }
+            }
+        });
+
+        // Добавляем информацию о прогрессе
+        const studentsWithProgress = await Promise.all(
+            enrollments.map(async (enrollment) => {
+                const progress = await prisma.progress.findMany({
+                    where: {
+                        userId: enrollment.userId,
+                        lesson: {
+                            courseId: courseId
+                        }
+                    },
+                    select: {
+                        completed: true,
+                        timeSpent: true,
+                        quizScore: true
+                    }
+                });
+
+                const totalLessons = await prisma.lesson.count({
+                    where: { courseId }
+                });
+
+                const completedLessons = progress.filter(p => p.completed).length;
+                const totalTimeSpent = progress.reduce((sum, p) => sum + p.timeSpent, 0);
+
+                return {
+                    ...enrollment.user,
+                    enrolledAt: enrollment.enrolledAt,
+                    progress: totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0,
+                    completedLessons,
+                    totalLessons,
+                    totalTimeSpent,
+                    avgQuizScore: progress.length > 0 
+                        ? Math.round(progress.reduce((sum, p) => sum + (p.quizScore || 0), 0) / progress.length)
+                        : 0
+                };
+            })
+        );
+
+        res.json({
+            success: true,
+            data: studentsWithProgress
+        });
+
+    } catch (error) {
+        console.error('Error fetching course students:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка при получении студентов курса'
+        });
+    }
+});
+
+// Добавить студента на курс
+router.post('/:id/students', auth, async (req, res) => {
     try {
         const courseId = parseInt(req.params.id);
         const { userId } = req.body;
+        const currentUser = req.user;
 
-        if (!userId) {
-            return res.status(400).json({
+        const course = await prisma.course.findUnique({
+            where: { id: courseId }
+        });
+
+        if (!course) {
+            return res.status(404).json({
                 success: false,
-                message: 'ID студента обязателен'
+                message: 'Курс не найден'
             });
         }
+
+        // Проверяем права
+        if (currentUser.role !== 'ADMIN' && course.teacherId !== currentUser.id) {
+            return res.status(403).json({
+                success: false,
+                message: 'Нет прав на добавление студентов в этот курс'
+            });
+        }
+
+        // Проверяем существование пользователя
+        const user = await prisma.user.findUnique({
+            where: { id: userId }
+        });
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'Пользователь не найден'
+            });
+        }
+
+        // Проверяем, что добавляем только студентов
+        if (user.role !== 'STUDENT') {
+            return res.status(400).json({
+                success: false,
+                message: 'Можно добавлять только студентов'
+            });
+        }
+
+        // Проверяем, не записан ли уже
+        const existingEnrollment = await prisma.enrollment.findUnique({
+            where: {
+                userId_courseId: {
+                    userId,
+                    courseId
+                }
+            }
+        });
+
+        if (existingEnrollment) {
+            return res.status(400).json({
+                success: false,
+                message: 'Студент уже записан на этот курс'
+            });
+        }
+
+        // Создаем запись о зачислении
+        const enrollment = await prisma.enrollment.create({
+            data: {
+                userId,
+                courseId,
+                enrolledAt: new Date()
+            }
+        });
+
+        res.json({
+            success: true,
+            message: 'Студент успешно добавлен на курс',
+            data: enrollment
+        });
+
+    } catch (error) {
+        console.error('Error adding student to course:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка при добавлении студента на курс'
+        });
+    }
+});
+
+// Удалить студента из курса
+router.delete('/:id/students/:studentId', auth, async (req, res) => {
+    try {
+        const courseId = parseInt(req.params.id);
+        const studentId = parseInt(req.params.studentId);
+        const currentUser = req.user;
+
+        const course = await prisma.course.findUnique({
+            where: { id: courseId }
+        });
+
+        if (!course) {
+            return res.status(404).json({
+                success: false,
+                message: 'Курс не найден'
+            });
+        }
+
+        // Проверяем права
+        if (currentUser.role !== 'ADMIN' && course.teacherId !== currentUser.id) {
+            return res.status(403).json({
+                success: false,
+                message: 'Нет прав на удаление студентов из этого курса'
+            });
+        }
+
+        // Проверяем существование зачисления
+        const enrollment = await prisma.enrollment.findUnique({
+            where: {
+                userId_courseId: {
+                    userId: studentId,
+                    courseId
+                }
+            }
+        });
+
+        if (!enrollment) {
+            return res.status(404).json({
+                success: false,
+                message: 'Студент не записан на этот курс'
+            });
+        }
+
+        // Удаляем зачисление
+        await prisma.enrollment.delete({
+            where: {
+                userId_courseId: {
+                    userId: studentId,
+                    courseId
+                }
+            }
+        });
+
+        // Удаляем прогресс студента по этому курсу
+        await prisma.progress.deleteMany({
+            where: {
+                userId: studentId,
+                lesson: {
+                    courseId
+                }
+            }
+        });
+
+        res.json({
+            success: true,
+            message: 'Студент успешно удален из курса'
+        });
+
+    } catch (error) {
+        console.error('Error removing student from course:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка при удалении студента из курса'
+        });
+    }
+});
+
+
+/**
+ * GET /api/courses/teacher/:teacherId
+ * Get courses by teacher (for admin dashboard)
+ */
+router.get('/teacher/:teacherId', auth, async (req, res, next) => {
+    try {
+        const teacherId = parseInt(req.params.teacherId);
+        const { published = true } = req.query;
+
+        const where = { teacherId };
+        
+        if (published === 'true') {
+            where.isPublished = true;
+        } else if (published === 'false') {
+            where.isPublished = false;
+        }
+
+        const courses = await prisma.course.findMany({
+            where,
+            include: {
+                teacher: {
+                    select: { id: true, name: true, email: true }
+                },
+                _count: {
+                    select: { lessons: true, enrollments: true }
+                }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        res.json({
+            success: true,
+            data: courses
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * DELETE /api/courses/:id/students/:userId
+ * Remove student from course (Teacher/Admin)
+ */
+router.delete('/:id/students/:userId', auth, isTeacher, async (req, res, next) => {
+    try {
+        const courseId = parseInt(req.params.id);
+        const userId = parseInt(req.params.userId);
 
         const course = await prisma.course.findUnique({
             where: { id: courseId }
@@ -411,26 +710,380 @@ router.post('/:id/students', auth, isTeacher, async (req, res, next) => {
             });
         }
 
-        const enrollment = await prisma.enrollment.upsert({
+        // Don't allow removing the teacher from their own course
+        if (userId === course.teacherId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Нельзя удалить преподавателя из его собственного курса'
+            });
+        }
+
+        await prisma.enrollment.delete({
             where: {
                 userId_courseId: {
-                    userId: parseInt(userId),
+                    userId,
                     courseId
                 }
-            },
-            create: {
-                userId: parseInt(userId),
-                courseId
-            },
-            update: {}
+            }
         });
 
-        res.status(201).json({
+        // Delete all progress records for this user in this course
+        await prisma.progress.deleteMany({
+            where: {
+                userId,
+                lesson: { courseId }
+            }
+        });
+
+        res.json({
             success: true,
-            data: enrollment,
-            message: 'Студент записан на курс'
+            message: 'Студент удалён из курса'
         });
     } catch (error) {
+        next(error);
+    }
+});
+
+// Добавить эти маршруты к существующим
+
+// Записать пользователей на курс (массовая запись)
+router.post('/:id/enrollments/batch', auth, async (req, res) => { // ЗАМЕНИЛИ authMiddleware на auth
+    try {
+        const courseId = parseInt(req.params.id);
+        const { userIds } = req.body;
+        const currentUser = req.user;
+
+        // Проверяем существование курса
+        const course = await prisma.course.findUnique({
+            where: { id: courseId },
+            include: { teacher: true }
+        });
+
+        if (!course) {
+            return res.status(404).json({ error: 'Курс не найден' });
+        }
+
+        // Проверка прав
+        if (currentUser.role === 'ADMIN') {
+            // Админ может записывать всех
+        } else if (currentUser.role === 'TEACHER') {
+            // Преподаватель может записывать только на свои курсы
+            if (course.teacherId !== currentUser.id) {
+                return res.status(403).json({ error: 'Вы не можете записывать пользователей на этот курс' });
+            }
+            
+            // Проверяем, что записываем только студентов
+            const usersToEnroll = await prisma.user.findMany({
+                where: { id: { in: userIds } }
+            });
+            
+            const nonStudents = usersToEnroll.filter(user => user.role !== 'STUDENT');
+            if (nonStudents.length > 0) {
+                return res.status(403).json({ 
+                    error: 'Преподаватель может записывать только студентов',
+                    nonStudents: nonStudents.map(u => ({ id: u.id, name: u.name }))
+                });
+            }
+        } else {
+            return res.status(403).json({ error: 'Доступ запрещен' });
+        }
+
+        // Проверяем, что пользователи существуют
+        const existingUsers = await prisma.user.findMany({
+            where: { id: { in: userIds } }
+        });
+
+        if (existingUsers.length !== userIds.length) {
+            const foundIds = existingUsers.map(u => u.id);
+            const missingIds = userIds.filter(id => !foundIds.includes(id));
+            return res.status(404).json({ 
+                error: 'Некоторые пользователи не найдены',
+                missingIds 
+            });
+        }
+
+        // Проверяем, не записаны ли уже пользователи
+        const existingEnrollments = await prisma.enrollment.findMany({
+            where: {
+                courseId,
+                userId: { in: userIds }
+            }
+        });
+
+        const existingUserIds = existingEnrollments.map(e => e.userId);
+        const newUserIds = userIds.filter(id => !existingUserIds.includes(id));
+
+        if (newUserIds.length === 0) {
+            return res.status(400).json({ 
+                error: 'Все выбранные пользователи уже записаны на курс',
+                existingUserIds 
+            });
+        }
+
+        // Создаем записи о зачислении
+        const enrollmentsData = newUserIds.map(userId => ({
+            userId,
+            courseId,
+            enrolledAt: new Date()
+        }));
+
+        await prisma.enrollment.createMany({
+            data: enrollmentsData,
+            skipDuplicates: true
+        });
+
+        // Получаем обновленную информацию о курсе
+        const updatedCourse = await prisma.course.findUnique({
+            where: { id: courseId },
+            include: {
+                _count: {
+                    select: { enrollments: true }
+                }
+            }
+        });
+
+        res.json({
+            success: true,
+            message: 'Пользователи успешно записаны на курс',
+            data: {
+                enrolledCount: newUserIds.length,
+                alreadyEnrolledCount: existingUserIds.length,
+                course: updatedCourse
+            }
+        });
+
+    } catch (error) {
+        console.error('Error batch enrolling users:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Ошибка при записи пользователей' 
+        });
+    }
+});
+
+// Получить пользователей для записи
+router.get('/:id/enrollable-users', auth, async (req, res) => { // ЗАМЕНИЛИ authMiddleware на auth
+    try {
+        const courseId = parseInt(req.params.id);
+        const currentUser = req.user;
+        const { role } = req.query;
+
+        const course = await prisma.course.findUnique({
+            where: { id: courseId }
+        });
+
+        if (!course) {
+            return res.status(404).json({ 
+                success: false,
+                error: 'Курс не найден' 
+            });
+        }
+
+        // Определяем, каких пользователей можно показывать
+        let whereCondition = {};
+        
+        if (currentUser.role === 'ADMIN') {
+            // Админ видит всех, кроме себя
+            whereCondition.id = { not: currentUser.id };
+            if (role && role !== 'all') {
+                whereCondition.role = role.toUpperCase();
+            }
+        } else if (currentUser.role === 'TEACHER') {
+            // Преподаватель видит только студентов
+            whereCondition.role = 'STUDENT';
+        } else {
+            return res.status(403).json({ 
+                success: false,
+                error: 'Доступ запрещен' 
+            });
+        }
+
+        // Получаем пользователей
+        const users = await prisma.user.findMany({
+            where: whereCondition,
+            select: {
+                id: true,
+                email: true,
+                name: true,
+                role: true,
+                avatar: true,
+                _count: {
+                    select: {
+                        enrollments: {
+                            where: { courseId }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Фильтруем уже записанных пользователей
+        const enrollableUsers = users.filter(user => user._count.enrollments === 0)
+            .map(user => {
+                const { _count, ...userData } = user;
+                return userData;
+            });
+
+        res.json({
+            success: true,
+            data: enrollableUsers,
+            count: enrollableUsers.length
+        });
+
+    } catch (error) {
+        console.error('Error fetching enrollable users:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Ошибка при получении пользователей' 
+        });
+    }
+});
+
+/**
+ * GET /api/courses/:id/analytics
+ * Get course analytics (Teacher/Admin)
+ */
+router.get('/:id/analytics', auth, isTeacher, async (req, res, next) => {
+    try {
+        const courseId = parseInt(req.params.id);
+
+        const course = await prisma.course.findUnique({
+            where: { id: courseId },
+            include: {
+                teacher: {
+                    select: { id: true, name: true }
+                }
+            }
+        });
+
+        if (!course) {
+            return res.status(404).json({
+                success: false,
+                message: 'Курс не найден'
+            });
+        }
+
+        // Check ownership (unless admin)
+        if (req.user.role !== 'ADMIN' && course.teacherId !== req.user.id) {
+            return res.status(403).json({
+                success: false,
+                message: 'Нет прав на просмотр аналитики этого курса'
+            });
+        }
+
+        const [
+            totalStudents,
+            activeStudents,
+            totalLessons,
+            completedLessonsCount,
+            recentEnrollments,
+            progressDistribution
+        ] = await Promise.all([
+            // Total students enrolled
+            prisma.enrollment.count({ where: { courseId } }),
+            
+            // Active students (completed at least one lesson in last 7 days)
+            prisma.enrollment.count({
+                where: {
+                    courseId,
+                    user: {
+                        progress: {
+                            some: {
+                                lesson: { courseId },
+                                completedAt: {
+                                    gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+                                }
+                            }
+                        }
+                    }
+                }
+            }),
+            
+            // Total lessons
+            prisma.lesson.count({ where: { courseId } }),
+            
+            // Total completed lessons across all students
+            prisma.progress.count({
+                where: {
+                    completed: true,
+                    lesson: { courseId }
+                }
+            }),
+            
+            // Recent enrollments (last 30 days)
+            prisma.enrollment.findMany({
+                where: {
+                    courseId,
+                    enrolledAt: {
+                        gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+                    }
+                },
+                include: {
+                    user: {
+                        select: { id: true, name: true, avatar: true }
+                    }
+                },
+                orderBy: { enrolledAt: 'desc' },
+                take: 5
+            }),
+            
+            // Progress distribution
+            prisma.$queryRaw`
+                SELECT 
+                    CASE 
+                        WHEN progress_percentage = 0 THEN '0%'
+                        WHEN progress_percentage <= 25 THEN '1-25%'
+                        WHEN progress_percentage <= 50 THEN '26-50%'
+                        WHEN progress_percentage <= 75 THEN '51-75%'
+                        WHEN progress_percentage < 100 THEN '76-99%'
+                        ELSE '100%'
+                    END as range,
+                    COUNT(*) as students
+                FROM (
+                    SELECT 
+                        e.userId,
+                        COALESCE(ROUND(COUNT(CASE WHEN p.completed THEN 1 END) * 100.0 / NULLIF(l.total_lessons, 0)), 0) as progress_percentage
+                    FROM enrollments e
+                    LEFT JOIN (
+                        SELECT userId, lessonId, completed
+                        FROM progress
+                        WHERE lessonId IN (SELECT id FROM lessons WHERE courseId = ${courseId})
+                    ) p ON e.userId = p.userId
+                    LEFT JOIN (
+                        SELECT courseId, COUNT(*) as total_lessons
+                        FROM lessons
+                        WHERE courseId = ${courseId}
+                        GROUP BY courseId
+                    ) l ON e.courseId = l.courseId
+                    WHERE e.courseId = ${courseId}
+                    GROUP BY e.userId, l.total_lessons
+                ) progress_data
+                GROUP BY range
+                ORDER BY range
+            `
+        ]);
+
+        const avgProgress = totalStudents > 0 && totalLessons > 0
+            ? Math.round((completedLessonsCount / (totalStudents * totalLessons)) * 100)
+            : 0;
+
+        res.json({
+            success: true,
+            data: {
+                course,
+                stats: {
+                    totalStudents,
+                    activeStudents,
+                    totalLessons,
+                    completedLessonsCount,
+                    avgProgress
+                },
+                recentEnrollments,
+                progressDistribution
+            }
+        });
+    } catch (error) {
+        console.error('Analytics error:', error);
         next(error);
     }
 });

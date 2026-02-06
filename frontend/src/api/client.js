@@ -1,91 +1,317 @@
+// frontend/src/api/client.js
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-
-const api = axios.create({
-    baseURL: API_BASE_URL,
-    headers: {
-        'Content-Type': 'application/json',
-    },
+// Создаем экземпляр axios с базовыми настройками
+const apiClient = axios.create({
+  baseURL: 'http://localhost:3000/api',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  withCredentials: true, // Для работы с cookies
 });
 
-// Request interceptor - add JWT token
-api.interceptors.request.use(
-    (config) => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-    },
-    (error) => Promise.reject(error)
-);
-
-// Response interceptor - handle errors
-api.interceptors.response.use(
-    (response) => response,
-    (error) => {
-        if (error.response?.status === 401) {
-            // Token expired or invalid
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            window.location.href = '/login';
-        }
-        return Promise.reject(error);
+// Request interceptor для добавления токена
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
+    return config;
+  },
+  (error) => Promise.reject(error)
 );
 
-// Auth API
+// Response interceptor для обработки ошибок
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    
+    // Если 401 и это не запрос на обновление токена
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      
+      // Здесь можно добавить логику обновления токена
+      // Пока просто очищаем и редиректим
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    }
+    
+    return Promise.reject(error);
+  }
+);
+
+// ==================== АВТОРИЗАЦИЯ ====================
 export const authAPI = {
-    login: (email, password) => api.post('/auth/login', { email, password }),
-    getMe: () => api.get('/auth/me'),
-    changePassword: (currentPassword, newPassword) =>
-        api.put('/auth/password', { currentPassword, newPassword }),
+  login: (email, password) =>
+    apiClient.post('/auth/login', { email, password }),
+    
+  register: (data) => 
+    apiClient.post('/auth/register', data),
+    
+  getMe: () => 
+    apiClient.get('/auth/me'),
+    
+  changePassword: (data) =>
+    apiClient.put('/auth/password', data),
+    
+  logout: () => 
+    apiClient.post('/auth/logout'),
 };
 
-// Users API (Admin)
+// ==================== ПОЛЬЗОВАТЕЛИ ====================
 export const usersAPI = {
-    getAll: (params) => api.get('/users', { params }),
-    getById: (id) => api.get(`/users/${id}`),
-    create: (data) => api.post('/users', data),
-    update: (id, data) => api.put(`/users/${id}`, data),
-    delete: (id) => api.delete(`/users/${id}`),
+  getAll: (params) => 
+    apiClient.get('/users', { params }),
+    
+  getAllForChat: () => 
+    apiClient.get('/users/list'),
+    
+  getById: (id) => 
+    apiClient.get(`/users/${id}`),
+    
+  update: (id, data) => 
+    apiClient.put(`/users/${id}`, data),
+    
+  getAllAdmin: () => 
+    apiClient.get('/admin/users'),
+    
+  create: (data) => 
+    apiClient.post('/admin/users', data),
+    
+  updateRole: (id, data) => 
+    apiClient.patch(`/admin/users/${id}/role`, data),
+    
+  delete: (id) => 
+    apiClient.delete(`/admin/users/${id}`),
+    
+  getStudents: () => 
+    apiClient.get('/users/students'),
+    
+  getTeachers: () => 
+    apiClient.get('/users/teachers'),
 };
 
-// Courses API
+// ==================== КУРСЫ ====================
 export const coursesAPI = {
-    getAll: (params) => api.get('/courses', { params }),
-    getById: (id) => api.get(`/courses/${id}`),
-    create: (data) => api.post('/courses', data),
-    update: (id, data) => api.put(`/courses/${id}`, data),
-    delete: (id) => api.delete(`/courses/${id}`),
-    enroll: (id) => api.post(`/courses/${id}/enroll`),
-    assignStudent: (courseId, userId) => api.post(`/courses/${courseId}/students`, { userId }),
+  // Основные методы
+  getAll: (params) => 
+    apiClient.get('/courses', { params }),
+    
+  getById: (id) => 
+    apiClient.get(`/courses/${id}`),
+    
+  create: (data) => 
+    apiClient.post('/courses', data),
+    
+  update: (id, data) => 
+    apiClient.put(`/courses/${id}`, data),
+    
+  delete: (id) => 
+    apiClient.delete(`/courses/${id}`),
+    
+  // Запись на курсы
+  enroll: (courseId) => 
+    apiClient.post(`/courses/${courseId}/enroll`),
+    
+  batchEnroll: (courseId, data) => 
+    apiClient.post(`/courses/${courseId}/enrollments/batch`, data),
+    
+  // Студенты курса
+  getStudents: (courseId) => 
+    apiClient.get(`/courses/${courseId}/students`),
+    
+  addStudent: (courseId, data) => 
+    apiClient.post(`/courses/${courseId}/students`, data),
+    
+  removeStudent: (courseId, userId) => 
+    apiClient.delete(`/courses/${courseId}/students/${userId}`),
+    
+  // Поиск пользователей для записи
+  getEnrollableUsers: (courseId, params) => 
+    apiClient.get(`/courses/${courseId}/enrollable-users`, { params }),
+    
+  // Получение курсов по учителю
+  getByTeacher: (teacherId, params) => 
+    apiClient.get(`/courses/teacher/${teacherId}`, { params }),
+    
+  // Аналитика
+  getAnalytics: (courseId, params) => 
+    apiClient.get(`/courses/${courseId}/analytics`, { params }),
 };
 
-// Lessons API
+// ==================== УРОКИ ====================
 export const lessonsAPI = {
-    getById: (id) => api.get(`/lessons/${id}`),
-    create: (data) => api.post('/lessons', data),
-    update: (id, data) => api.put(`/lessons/${id}`, data),
-    delete: (id) => api.delete(`/lessons/${id}`),
-    reorder: (lessonOrders) => api.put('/lessons/reorder', { lessonOrders }),
+  getById: (id) => 
+    apiClient.get(`/lessons/${id}`),
+    
+  create: (data) => 
+    apiClient.post('/lessons', data),
+    
+  createInCourse: (courseId, data) => 
+    apiClient.post(`/courses/${courseId}/lessons`, data),
+    
+  update: (id, data) => 
+    apiClient.put(`/lessons/${id}`, data),
+    
+  delete: (id) => 
+    apiClient.delete(`/lessons/${id}`),
+    
+  complete: (id) => 
+    apiClient.post(`/lessons/${id}/complete`),
+    
+  getByCourse: (courseId) => 
+    apiClient.get(`/lessons/course/${courseId}`),
 };
 
-// Progress API
+// ==================== ПРОГРЕСС ====================
 export const progressAPI = {
-    getAll: () => api.get('/progress'),
-    update: (lessonId, data) => api.put(`/progress/${lessonId}`, data),
-    getPortfolio: () => api.get('/progress/portfolio'),
+  getAll: () => 
+    apiClient.get('/progress'),
+    
+  update: (lessonId, data) => 
+    apiClient.post(`/lessons/${lessonId}/progress`, data),
+    
+  updateLessonProgress: (lessonId, data) => 
+    apiClient.put(`/progress/lessons/${lessonId}`, data),
+    
+  getByCourse: (courseId) => 
+    apiClient.get(`/courses/${courseId}/progress`),
+    
+  getByCourseAlt: (courseId) => 
+    apiClient.get(`/progress/course/${courseId}`),
+    
+  getStats: () => 
+    apiClient.get('/progress/stats'),
 };
 
-// Chat API
+// ==================== ЧАТЫ ====================
 export const chatAPI = {
-    getHistory: (limit = 50) => api.get('/chat/history', { params: { limit } }),
-    sendMessage: (message, context) => api.post('/chat', { message, context }),
-    getRecommendations: () => api.post('/chat/recommendations'),
-    getResume: () => api.post('/chat/resume'),
-    deleteMessage: (id) => api.delete(`/chat/${id}`),
+  // AI Chats
+  getSessions: () => apiClient.get('/chat/sessions'),
+  createSession: (data) => apiClient.post('/chat/sessions', data),
+  
+  // User Chats
+  getUserChats: () => apiClient.get('/chat/user'),
+  createChat: (data) => apiClient.post('/chat', data),
+  
+  // Universal chat endpoints
+  getChat: (chatId) => {
+    // Try both endpoints
+    return apiClient.get(`/chat/${chatId}`).catch(() => 
+      apiClient.get(`/chat/chat/${chatId}`)
+    );
+  },
+  
+  getMessages: (chatId, params = {}) => 
+    apiClient.get(`/chat/${chatId}/messages`, { params }),
+  
+  sendMessage: (chatId, data) => 
+    apiClient.post(`/chat/${chatId}/messages`, data),
+  
+  deleteMessage: (messageId) => 
+    apiClient.delete(`/chat/messages/${messageId}`),
+  
+  // AI Features
+  generateQuiz: (data) => 
+    apiClient.post('/chat/generate-quiz', data),
+  simulateConversation: (data) => 
+    apiClient.post('/chat/simulate-conversation', data)
 };
 
-export default api;
+// ==================== ПОРТФОЛИО ====================
+export const portfolioAPI = {
+  get: () => 
+    apiClient.get('/portfolio'),
+    
+  update: (data) => 
+    apiClient.put('/portfolio', data),
+    
+  updateBio: (bio) => 
+    apiClient.patch('/portfolio/bio', { bio }),
+    
+  addSkill: (skill) => 
+    apiClient.post('/portfolio/skills', skill),
+    
+  deleteSkill: (id) => 
+    apiClient.delete(`/portfolio/skills/${id}`),
+    
+  addGoal: (goal) => 
+    apiClient.post('/portfolio/goals', goal),
+    
+  updateGoal: (id, data) => 
+    apiClient.put(`/portfolio/goals/${id}`, data),
+    
+  deleteGoal: (id) => 
+    apiClient.delete(`/portfolio/goals/${id}`),
+    
+  generateLink: () => 
+    apiClient.post('/portfolio/generate-link'),
+};
+
+// ==================== УВЕДОМЛЕНИЯ ====================
+export const noticeAPI = {
+  getAll: () => 
+    apiClient.get('/notices'),
+    
+  getUnread: () => 
+    apiClient.get('/notices/unread'),
+    
+  markAsRead: (id) => 
+    apiClient.patch(`/notices/${id}/read`),
+    
+  markAllAsRead: () => 
+    apiClient.patch('/notices/read-all'),
+    
+  delete: (id) => 
+    apiClient.delete(`/notices/${id}`),
+};
+
+// ==================== СЕРТИФИКАТЫ ====================
+export const certificatesAPI = {
+  getAll: () => 
+    apiClient.get('/certificates'),
+    
+  getById: (id) => 
+    apiClient.get(`/certificates/${id}`),
+    
+  generate: (courseId) => 
+    apiClient.post(`/certificates/courses/${courseId}`),
+    
+  verify: (code) => 
+    apiClient.post('/certificates/verify', { code }),
+};
+
+// ==================== АНАЛИТИКА ====================
+export const analyticsAPI = {
+  getUserStats: () => 
+    apiClient.get('/analytics/user'),
+    
+  getCourseStats: (courseId) => 
+    apiClient.get(`/analytics/courses/${courseId}`),
+    
+  getAdminStats: () => 
+    apiClient.get('/analytics/admin'),
+};
+
+// ==================== ЗАГРУЗКА ФАЙЛОВ ====================
+export const uploadAPI = {
+  uploadAvatar: (formData) => 
+    apiClient.post('/upload/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }),
+    
+  uploadCourseImage: (formData) => 
+    apiClient.post('/upload/course-image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }),
+    
+  uploadLessonFile: (formData) => 
+    apiClient.post('/upload/lesson-file', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }),
+};
+
+export default apiClient;

@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { coursesAPI } from '../api/client';
+import { useAuth } from '../contexts/AuthContext';
 import CourseCard from '../components/courses/CourseCard';
-import { Search, Filter, BookOpen } from 'lucide-react';
+import { Search, Filter, BookOpen, Plus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const categories = [
     'Все',
@@ -13,6 +15,9 @@ const categories = [
 ];
 
 export default function CoursesPage() {
+    const { user } = useAuth();
+    const navigate = useNavigate();
+    
     const [courses, setCourses] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -20,34 +25,51 @@ export default function CoursesPage() {
     const [selectedCategory, setSelectedCategory] = useState('Все');
     const [showEnrolledOnly, setShowEnrolledOnly] = useState(false);
 
+    // Показывать "Только мои курсы" только студентам
+    const showEnrolledFilter = user?.role === 'STUDENT';
+    // Показывать кнопку создания курса только учителям и админам
+    const canCreateCourse = user?.role === 'TEACHER' || user?.role === 'ADMIN';
+
     useEffect(() => {
         fetchCourses();
     }, [selectedCategory, showEnrolledOnly]);
 
-    const fetchCourses = async () => {
-        try {
-            setIsLoading(true);
-            const params = {};
-            if (selectedCategory !== 'Все') {
-                params.category = selectedCategory;
-            }
-            if (showEnrolledOnly) {
-                params.enrolled = 'true';
-            }
-
-            const response = await coursesAPI.getAll(params);
-            setCourses(response.data.data);
-        } catch (err) {
-            setError(err.response?.data?.message || 'Ошибка загрузки курсов');
-        } finally {
-            setIsLoading(false);
+const fetchCourses = async () => {
+    try {
+        setIsLoading(true);
+        const params = {};
+        
+        if (selectedCategory !== 'Все') {
+            params.category = selectedCategory;
         }
-    };
+        
+        // Если студент и включен фильтр "Только мои курсы"
+        if (showEnrolledOnly && user?.role === 'STUDENT') {
+            params.enrolled = 'true';
+        }
+        
+        // Если учитель - показываем только его курсы
+        if (user?.role === 'TEACHER') {
+            params.teacher = user.id;
+        }
+        
+        // Если админ - показываем все курсы (без фильтра teacher)
+        // Для админа не применяем фильтр teacher, чтобы видеть все курсы
+
+        const response = await coursesAPI.getAll(params);
+        setCourses(response.data.data);
+    } catch (err) {
+        setError(err.response?.data?.message || 'Ошибка загрузки курсов');
+    } finally {
+        setIsLoading(false);
+    }
+};
 
     const filteredCourses = courses.filter(course =>
         course.title.toLowerCase().includes(search.toLowerCase()) ||
         course.description?.toLowerCase().includes(search.toLowerCase())
     );
+
 
     if (error) {
         return (
@@ -67,19 +89,37 @@ export default function CoursesPage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Курсы</h1>
-                    <p className="text-gray-600 mt-1">Выберите курс для изучения</p>
+                    <p className="text-gray-600 mt-1">
+                        {user?.role === 'STUDENT' ? 'Выберите курс для изучения' : 
+                         user?.role === 'TEACHER' ? 'Управление вашими курсами' :
+                         'Управление всеми курсами'}
+                    </p>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-                        <input
-                            type="checkbox"
-                            checked={showEnrolledOnly}
-                            onChange={(e) => setShowEnrolledOnly(e.target.checked)}
-                            className="w-4 h-4 text-primary rounded focus:ring-primary"
-                        />
-                        Только мои курсы
-                    </label>
+                <div className="flex items-center gap-4">
+                    {/* Фильтр "Только мои курсы" только для студентов */}
+                    {showEnrolledFilter && (
+                        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={showEnrolledOnly}
+                                onChange={(e) => setShowEnrolledOnly(e.target.checked)}
+                                className="w-4 h-4 text-primary rounded focus:ring-primary"
+                            />
+                            Только мои курсы
+                        </label>
+                    )}
+
+                    {/* Кнопка создания курса для учителей и админов */}
+                    {canCreateCourse && (
+                        <button 
+                            onClick={() => navigate('/courses/create')}
+                            className="btn btn-primary flex items-center gap-2"
+                        >
+                            <Plus className="w-5 h-5" />
+                            Создать курс
+                        </button>
+                    )}
                 </div>
             </div>
 

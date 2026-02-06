@@ -8,7 +8,7 @@ export function AuthProvider({ children }) {
     const [isLoading, setIsLoading] = useState(true);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-    // Check for existing token on mount
+    // Проверка аутентификации при монтировании
     useEffect(() => {
         const checkAuth = async () => {
             const token = localStorage.getItem('token');
@@ -16,14 +16,22 @@ export function AuthProvider({ children }) {
 
             if (token && savedUser) {
                 try {
-                    // Verify token is still valid
+                    // Проверяем валидность токена
                     const response = await authAPI.getMe();
-                    setUser(response.data.data);
+                    
+                    // Обновляем данные пользователя
+                    const updatedUser = response.data.data;
+                    setUser(updatedUser);
                     setIsAuthenticated(true);
+                    
+                    // Синхронизируем localStorage
+                    localStorage.setItem('user', JSON.stringify(updatedUser));
                 } catch (error) {
-                    // Token invalid, clear storage
+                    // Токен невалидный, очищаем хранилище
                     localStorage.removeItem('token');
                     localStorage.removeItem('user');
+                    setUser(null);
+                    setIsAuthenticated(false);
                 }
             }
             setIsLoading(false);
@@ -34,35 +42,63 @@ export function AuthProvider({ children }) {
 
     const login = async (email, password) => {
         try {
+            setIsLoading(true);
             const response = await authAPI.login(email, password);
             const { token, user: userData } = response.data.data;
 
+            // Сохраняем в localStorage
             localStorage.setItem('token', token);
             localStorage.setItem('user', JSON.stringify(userData));
 
+            // Обновляем состояние
             setUser(userData);
             setIsAuthenticated(true);
 
-            return { success: true };
+            return { success: true, user: userData };
         } catch (error) {
+            const errorMessage = error.response?.data?.message || 
+                               error.message || 
+                               'Ошибка авторизации';
+            
+            console.error('Login error:', error);
+            
             return {
                 success: false,
-                message: error.response?.data?.message || 'Ошибка авторизации'
+                message: errorMessage
             };
+        } finally {
+            setIsLoading(false);
         }
     };
 
     const logout = () => {
+        // Очищаем localStorage
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        
+        // Сбрасываем состояние
         setUser(null);
         setIsAuthenticated(false);
+        
+        // Можно добавить запрос на сервер для выхода
+        // authAPI.logout();
     };
 
     const updateUser = (updatedData) => {
         const newUser = { ...user, ...updatedData };
         setUser(newUser);
         localStorage.setItem('user', JSON.stringify(newUser));
+    };
+
+    const refreshUser = async () => {
+        try {
+            const response = await authAPI.getMe();
+            const updatedUser = response.data.data;
+            setUser(updatedUser);
+            localStorage.setItem('user', JSON.stringify(updatedUser));
+        } catch (error) {
+            console.error('Failed to refresh user:', error);
+        }
     };
 
     const value = {
@@ -72,6 +108,7 @@ export function AuthProvider({ children }) {
         login,
         logout,
         updateUser,
+        refreshUser,
         isAdmin: user?.role === 'ADMIN',
         isTeacher: user?.role === 'TEACHER' || user?.role === 'ADMIN',
         isStudent: user?.role === 'STUDENT',

@@ -17,7 +17,7 @@ const navItems = [
     { path: '/courses', icon: BookOpen, label: 'Курсы', roles: ['ADMIN', 'TEACHER', 'STUDENT'] },
     { path: '/profile', icon: User, label: 'Профиль', roles: ['ADMIN', 'TEACHER', 'STUDENT'] },
     { path: '/portfolio', icon: Award, label: 'Портфолио', roles: ['STUDENT'] },
-    { path: '/chat', icon: MessageCircle, label: 'AI Чат', roles: ['ADMIN', 'TEACHER', 'STUDENT'] },
+    { path: '/chats', icon: MessageCircle, label: 'Чаты', roles: ['ADMIN', 'TEACHER', 'STUDENT'] },
     { path: '/admin/users', icon: Users, label: 'Пользователи', roles: ['ADMIN'] },
     { path: '/teacher/courses', icon: GraduationCap, label: 'Мои курсы', roles: ['TEACHER'] },
 ];

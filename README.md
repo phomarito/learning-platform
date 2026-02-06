@@ -44,7 +44,7 @@ npm run db:seed
 npm run dev
 ```
 
-Backend запустится на http://localhost:5000
+Backend запустится на http://localhost:3000
 
 ### 3. Запуск frontend
 

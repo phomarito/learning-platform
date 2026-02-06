@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { coursesAPI } from '../api/client';
+import { coursesAPI, usersAPI } from '../api/client';
 import {
     ArrowLeft,
     Clock,
@@ -10,8 +10,13 @@ import {
     FileText,
     HelpCircle,
     CheckCircle,
-    Lock
+    Lock,
+    UserPlus,
+    Edit,
+    BarChart3
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import EnrollUsersModal from '../components/EnrollUsersModal';
 
 const lessonIcons = {
     VIDEO: PlayCircle,
@@ -22,9 +27,11 @@ const lessonIcons = {
 export default function CourseDetailPage() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [course, setCourse] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isEnrolling, setIsEnrolling] = useState(false);
+    const [showEnrollModal, setShowEnrollModal] = useState(false);
 
     useEffect(() => {
         fetchCourse();
@@ -53,6 +60,27 @@ export default function CourseDetailPage() {
             setIsEnrolling(false);
         }
     };
+
+    const handleBatchEnroll = async (userIds) => {
+        try {
+            await coursesAPI.batchEnroll(id, { userIds });
+            await fetchCourse();
+            return true;
+        } catch (error) {
+            console.error('Error batch enrolling:', error);
+            throw error;
+        }
+    };
+
+    // Проверяем, является ли пользователь преподавателем этого курса
+    const isCourseTeacher = user && course && (
+        user.role === 'TEACHER' && user.id === course.teacherId
+    );
+
+    // Проверяем, имеет ли пользователь права на запись других
+    const canEnrollOthers = user && (
+        user.role === 'ADMIN' || isCourseTeacher
+    );
 
     if (isLoading) {
         return (
@@ -88,11 +116,37 @@ export default function CourseDetailPage() {
             </button>
 
             {/* Course Header */}
-            <div className="bg-gradient-to-r from-primary to-purple-700 rounded-2xl p-8 text-white">
+            <div className="bg-gradient-to-r from-primary to-purple-700 rounded-2xl p-8 text-white relative">
                 <div className="max-w-3xl">
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-white/20 mb-4">
-                        {course.category}
-                    </span>
+                    <div className="flex items-center justify-between mb-4">
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-white/20">
+                            {course.category}
+                        </span>
+                        
+                        {/* Кнопки действий для админа/преподавателя */}
+                        {canEnrollOthers && (
+                            <div className="flex items-center gap-2">
+                                {user.role === 'ADMIN' && (
+                                    <button
+                                        onClick={() => navigate(`/courses/${id}/analytics`)}
+                                        className="flex items-center gap-2 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-sm transition-colors"
+                                    >
+                                        <BarChart3 className="w-4 h-4" />
+                                        Аналитика
+                                    </button>
+                                )}
+                                {isCourseTeacher && (
+                                    <button
+                                        onClick={() => navigate(`/courses/${id}/edit`)}
+                                        className="flex items-center gap-2 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-sm transition-colors"
+                                    >
+                                        <Edit className="w-4 h-4" />
+                                        Редактировать
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
 
                     <h1 className="text-3xl font-bold mb-4">{course.title}</h1>
 
@@ -148,8 +202,16 @@ export default function CourseDetailPage() {
 
             {/* Lessons */}
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <div className="p-6 border-b border-gray-100">
+                <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                     <h3 className="font-bold text-gray-900">Содержание курса</h3>
+                    {isCourseTeacher && (
+                        <button
+                            onClick={() => navigate(`/courses/${id}/lessons/create`)}
+                            className="btn btn-primary btn-sm"
+                        >
+                            Добавить урок
+                        </button>
+                    )}
                 </div>
 
                 <div className="divide-y divide-gray-100">
@@ -161,18 +223,18 @@ export default function CourseDetailPage() {
                             <div
                                 key={lesson.id}
                                 className={`
-                  flex items-center gap-4 p-4 transition-colors
-                  ${isAccessible ? 'hover:bg-gray-50 cursor-pointer' : 'opacity-60'}
-                `}
+                                    flex items-center gap-4 p-4 transition-colors
+                                    ${isAccessible ? 'hover:bg-gray-50 cursor-pointer' : 'opacity-60'}
+                                `}
                                 onClick={() => isAccessible && navigate(`/lessons/${lesson.id}`)}
                             >
                                 <div className={`
-                  w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0
-                  ${lesson.completed
+                                    w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0
+                                    ${lesson.completed
                                         ? 'bg-green-100 text-green-600'
                                         : 'bg-gray-100 text-gray-500'
                                     }
-                `}>
+                                `}>
                                     {lesson.completed ? (
                                         <CheckCircle className="w-5 h-5" />
                                     ) : !isAccessible ? (
@@ -202,17 +264,45 @@ export default function CourseDetailPage() {
                 </div>
             </div>
 
-            {/* Enroll Button */}
-            {!course.isEnrolled && (
-                <div className="sticky bottom-4 bg-white rounded-xl border border-gray-200 p-4 shadow-lg">
-                    <button
-                        onClick={handleEnroll}
-                        disabled={isEnrolling}
-                        className="btn btn-primary w-full"
-                    >
-                        {isEnrolling ? 'Запись...' : 'Записаться на курс'}
-                    </button>
+            {/* Action Buttons */}
+            <div className="sticky bottom-4 bg-white rounded-xl border border-gray-200 p-4 shadow-lg">
+                <div className="flex flex-col sm:flex-row gap-3">
+                    {!course.isEnrolled ? (
+                        <>
+                            <button
+                                onClick={handleEnroll}
+                                disabled={isEnrolling}
+                                className="btn btn-primary flex-1"
+                            >
+                                {isEnrolling ? 'Запись...' : 'Записаться на курс'}
+                            </button>
+                            
+                            {canEnrollOthers && (
+                                <button
+                                    onClick={() => setShowEnrollModal(true)}
+                                    className="btn btn-secondary"
+                                >
+                                    <UserPlus className="w-4 h-4 mr-2" />
+                                    Записать пользователей
+                                </button>
+                            )}
+                        </>
+                    ) : (
+                        <div className="w-full text-center py-2">
+                            <p className="text-green-600 font-medium">Вы уже записаны на этот курс</p>
+                        </div>
+                    )}
                 </div>
+            </div>
+
+            {/* Модальное окно для записи пользователей */}
+            {showEnrollModal && (
+                <EnrollUsersModal
+                    courseId={id}
+                    currentUser={user}
+                    onClose={() => setShowEnrollModal(false)}
+                    onEnroll={handleBatchEnroll}
+                />
             )}
         </div>
     );

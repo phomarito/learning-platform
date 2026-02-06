@@ -16,7 +16,7 @@ git commit -m "Initial commit of LMS platform"
 3. **Связка с GitHub и пуш:**
 ```bash
 # Замените URL на ваш репозиторий
-git remote add origin https://github.com/ВАШ_USERNAME/ВАШ_REPO.git
+git remote add origin https://github.com/phomarito/learning-platform.git
 git branch -M main
 git push -u origin main
 ```
@@ -27,7 +27,7 @@ git push -u origin main
 
 ### Шаг 1: Скачивание (Клонирование)
 ```bash
-git clone https://github.com/ВАШ_USERNAME/ВАШ_REPO.git
+git clone https://github.com/phomarito/learning-platform.git
 cd learning-platform
 ```
 
@@ -86,7 +86,7 @@ npm install
 cd backend
 npm run dev
 ```
-*Сервер запустится на http://localhost:5000*
+*Сервер запустится на http://localhost:3000*
 
 ### Терминал 2: Frontend
 ```bash

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './contexts/AuthContext';
+import { SocketProvider } from './contexts/SocketContext';
 import { ProtectedRoute, PublicRoute, AdminRoute, TeacherRoute } from './components/ProtectedRoute';
 import DashboardLayout from './components/layout/DashboardLayout';
 
@@ -10,38 +11,19 @@ import CoursesPage from './pages/CoursesPage';
 import CourseDetailPage from './pages/CourseDetailPage';
 import LessonPage from './pages/LessonPage';
 import ProfilePage from './pages/ProfilePage';
+import PortfolioPage from './pages/PortfolioPage'
+import NoticePage from './pages/NoticePage'
+import AdminUsersPage from './pages/AdminUsersPage'
+import CourseCreatePage from './pages/CourseCreatePage'
+import LessonCreatePage from './pages/LessonCreatePage'
+import ChatsPage from './pages/ChatsPage'
+import ChatPage from './pages/ChatPage';
+import CourseStudentsPage from './pages/CourseStudentsPage';
+import CourseAnalyticsPage from './pages/CourseAnalyticsPage';
+import CourseEditPage from './pages/CourseEditPage';
 
-// Lazy load less common pages
+
 import { lazy, Suspense } from 'react';
-
-// Placeholder pages
-const PortfolioPage = () => (
-  <div className="text-center py-16">
-    <h1 className="text-2xl font-bold text-gray-900 mb-4">Портфолио</h1>
-    <p className="text-gray-600">Страница портфолио с сертификатами - в разработке</p>
-  </div>
-);
-
-const ChatPage = () => (
-  <div className="text-center py-16">
-    <h1 className="text-2xl font-bold text-gray-900 mb-4">AI Чат</h1>
-    <p className="text-gray-600">Страница чата с AI ассистентом - в разработке</p>
-  </div>
-);
-
-const AdminUsersPage = () => (
-  <div className="text-center py-16">
-    <h1 className="text-2xl font-bold text-gray-900 mb-4">Управление пользователями</h1>
-    <p className="text-gray-600">Админ-панель - в разработке</p>
-  </div>
-);
-
-const TeacherCoursesPage = () => (
-  <div className="text-center py-16">
-    <h1 className="text-2xl font-bold text-gray-900 mb-4">Мои курсы</h1>
-    <p className="text-gray-600">Панель преподавателя - в разработке</p>
-  </div>
-);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -65,6 +47,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
+          <SocketProvider>
           <Suspense fallback={<LoadingFallback />}>
             <Routes>
               {/* Public routes */}
@@ -88,8 +71,10 @@ function App() {
                 <Route path="/courses" element={<CoursesPage />} />
                 <Route path="/courses/:id" element={<CourseDetailPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/notice" element={<NoticePage />} />
                 <Route path="/portfolio" element={<PortfolioPage />} />
-                <Route path="/chat" element={<ChatPage />} />
+                <Route path="/chats" element={<ChatsPage />} />
+                <Route path="chat/:chatId" element={<ChatPage />} />
 
                 {/* Admin routes */}
                 <Route
@@ -100,16 +85,46 @@ function App() {
                     </AdminRoute>
                   }
                 />
+                <Route path="/courses/create" element={
+                  <ProtectedRoute allowedRoles={['ADMIN', 'TEACHER']}>
+                    <CourseCreatePage />
+                  </ProtectedRoute>
+                } />
 
-                {/* Teacher routes */}
-                <Route
-                  path="/teacher/courses"
-                  element={
-                    <TeacherRoute>
-                      <TeacherCoursesPage />
-                    </TeacherRoute>
-                  }
-                />
+                <Route path="courses/:id/students" element={
+                  <ProtectedRoute requireTeacherOrAdmin>
+                      <CourseStudentsPage />
+                  </ProtectedRoute>
+              } />
+              <Route path="courses/:id/analytics" element={
+                  <ProtectedRoute requireTeacherOrAdmin>
+                      <CourseAnalyticsPage />
+                  </ProtectedRoute>
+              } />
+              <Route path="courses/:id/edit" element={
+                  <ProtectedRoute requireTeacherOrAdmin>
+                      <CourseEditPage />
+                  </ProtectedRoute>
+              } />
+
+              <Route path="courses/:id/edit" element={
+                  <ProtectedRoute requireTeacherOrAdmin>
+                      <LessonCreatePage />
+                  </ProtectedRoute>
+              } />
+
+                <Route path="/courses/:courseId/lessons/create" element={
+                  <ProtectedRoute allowedRoles={['ADMIN', 'TEACHER']}>
+                    <LessonCreatePage />
+                  </ProtectedRoute>
+                } />
+
+                {/* <Route path="/lessons/:id/edit" element={
+                  <ProtectedRoute allowedRoles={['ADMIN', 'TEACHER']}>
+                    <LessonEditPage />
+                  </ProtectedRoute>
+                } /> */}
+
               </Route>
 
               {/* Lesson page - full screen without sidebar */}
@@ -127,6 +142,7 @@ function App() {
               <Route path="*" element={<Navigate to="/courses" replace />} />
             </Routes>
           </Suspense>
+          </SocketProvider>
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

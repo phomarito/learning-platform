@@ -120,25 +120,6 @@ export default function LoginPage() {
                             )}
                         </button>
                     </form>
-
-                    {/* Demo accounts */}
-                    <div className="mt-8 pt-6 border-t border-gray-100">
-                        <p className="text-sm text-gray-500 text-center mb-4">Тестовые аккаунты:</p>
-                        <div className="space-y-2 text-sm">
-                            <div className="flex justify-between p-2 bg-gray-50 rounded">
-                                <span className="text-gray-600">Admin</span>
-                                <span className="font-mono text-gray-800">admin@lms.com / admin123</span>
-                            </div>
-                            <div className="flex justify-between p-2 bg-gray-50 rounded">
-                                <span className="text-gray-600">Teacher</span>
-                                <span className="font-mono text-gray-800">teacher@lms.com / teacher123</span>
-                            </div>
-                            <div className="flex justify-between p-2 bg-gray-50 rounded">
-                                <span className="text-gray-600">Student</span>
-                                <span className="font-mono text-gray-800">student@lms.com / student123</span>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
