@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import CourseCard from '../components/courses/CourseCard';
 import { Search, BookOpen, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import ReactPaginate from 'react-paginate';
 
 const categories = [
     'Все',
@@ -24,6 +25,10 @@ export default function CoursesPage() {
     const [search, setSearch] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('Все');
     const [showEnrolledOnly, setShowEnrolledOnly] = useState(false);
+    
+    // Состояние для пагинации
+    const [currentPage, setCurrentPage] = useState(0);
+    const coursesPerPage = 6; // Курсов на странице
 
     const isStudent = user?.role === 'STUDENT';
     const isTeacher = user?.role === 'TEACHER';
@@ -36,6 +41,8 @@ export default function CoursesPage() {
 
     useEffect(() => {
         fetchCourses();
+        // Сбрасываем на первую страницу при изменении фильтров
+        setCurrentPage(0);
     }, [selectedCategory, showEnrolledOnly, user?.role]);
 
     const fetchCourses = async () => {
@@ -106,6 +113,17 @@ export default function CoursesPage() {
         return titleMatch || descMatch;
     });
 
+    // Логика для отображения только нужной страницы
+    const offset = currentPage * coursesPerPage;
+    const currentCourses = filteredCourses.slice(offset, offset + coursesPerPage);
+    const pageCount = Math.ceil(filteredCourses.length / coursesPerPage);
+
+    const handlePageClick = ({ selected }) => {
+        setCurrentPage(selected);
+        // Прокручиваем вверх при смене страницы
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center py-16">
@@ -136,13 +154,13 @@ export default function CoursesPage() {
                     {/* Фильтр "Только мои курсы" для учителей и админов */}
                     {showEnrolledFilter && (
                         <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-                            {/* <input
+                            <input
                                 type="checkbox"
                                 checked={showEnrolledOnly}
                                 onChange={(e) => setShowEnrolledOnly(e.target.checked)}
                                 className="w-4 h-4 text-primary rounded focus:ring-primary"
-                            /> */}
-                            {/* {isTeacher ? 'Только мои курсы' : 'Только созданные мной'} */}
+                            />
+                            {isTeacher ? 'Только мои курсы' : 'Только созданные мной'}
                         </label>
                     )}
 
@@ -233,10 +251,11 @@ export default function CoursesPage() {
             ) : (
                 <>
                     <div className="text-sm text-gray-600">
-                        Найдено курсов: {filteredCourses.length}
+                        Найдено курсов: {filteredCourses.length} • Страница {currentPage + 1} из {pageCount}
                     </div>
+                    
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredCourses.map(course => (
+                        {currentCourses.map(course => (
                             <CourseCard 
                                 key={course.id} 
                                 course={course}
@@ -246,6 +265,34 @@ export default function CoursesPage() {
                             />
                         ))}
                     </div>
+                    
+                    {/* Пагинация */}
+                    {pageCount > 1 && (
+                        <div className="flex justify-center mt-8">
+                            <ReactPaginate
+                                previousLabel="←"
+                                nextLabel="→"
+                                breakLabel="..."
+                                pageCount={pageCount}
+                                marginPagesDisplayed={2}
+                                pageRangeDisplayed={3}
+                                onPageChange={handlePageClick}
+                                containerClassName="flex items-center gap-1"
+                                pageClassName="block"
+                                pageLinkClassName="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                                previousClassName="block"
+                                previousLinkClassName="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                                nextClassName="block"
+                                nextLinkClassName="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                                breakClassName="px-3 py-2 text-gray-500"
+                                activeClassName="bg-primary text-white"
+                                activeLinkClassName="bg-primary text-white px-3 py-2 rounded-lg hover:bg-primary/90"
+                                disabledClassName="opacity-50 cursor-not-allowed"
+                                disabledLinkClassName="opacity-50 cursor-not-allowed"
+                                forcePage={currentPage}
+                            />
+                        </div>
+                    )}
                 </>
             )}
         </div>

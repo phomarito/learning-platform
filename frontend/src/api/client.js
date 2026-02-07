@@ -117,8 +117,7 @@ export const usersAPI = {
   getAllAdmin: () => 
     apiClient.get('/admin/users'),
     
-  create: (data) => 
-    apiClient.post('/admin/users', data),
+  create: (data) => apiClient.post('/users', data),
     
   updateRole: (id, data) => 
     apiClient.patch(`/admin/users/${id}/role`, data),
@@ -210,8 +209,8 @@ export const progressAPI = {
   getAll: () => 
     apiClient.get('/progress'),
     
-  update: (lessonId, data) => 
-    apiClient.post(`/lessons/${lessonId}/progress`, data),
+   update: (lessonId, data) => 
+    apiClient.put(`/progress/${lessonId}`, data),
     
   updateLessonProgress: (lessonId, data) => 
     apiClient.put(`/progress/lessons/${lessonId}`, data),
@@ -310,17 +309,20 @@ export const noticeAPI = {
 
 // ==================== СЕРТИФИКАТЫ ====================
 export const certificatesAPI = {
-  getAll: () => 
-    apiClient.get('/certificates'),
+    // Получить сертификат для курса
+    getForCourse: (courseId) => apiClient.get(`/certificates/course/${courseId}`),
     
-  getById: (id) => 
-    apiClient.get(`/certificates/${id}`),
+    // Сгенерировать PDF
+    generatePDF: (certificateId) => apiClient.get(`/certificates/${certificateId}/pdf`),
     
-  generate: (courseId) => 
-    apiClient.post(`/certificates/courses/${courseId}`),
+    // Поделиться сертификатом
+    share: (certificateId) => apiClient.post(`/certificates/${certificateId}/share`),
     
-  verify: (code) => 
-    apiClient.post('/certificates/verify', { code }),
+    // Получить все сертификаты пользователя
+    getAll: () => apiClient.get('/certificates'),
+    
+    // Проверить валидность
+    verify: (code) => apiClient.get(`/certificates/verify/${code}`)
 };
 
 // ==================== АНАЛИТИКА ====================

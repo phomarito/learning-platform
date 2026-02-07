@@ -21,6 +21,8 @@ import ChatPage from './pages/ChatPage';
 import CourseStudentsPage from './pages/CourseStudentsPage';
 import CourseAnalyticsPage from './pages/CourseAnalyticsPage';
 import CourseEditPage from './pages/CourseEditPage';
+import UserCreatePage from './pages/UserCreatePage'
+import CourseCompletionPage from './pages/CourseCompletionPage'
 
 import { Suspense } from 'react';
 
@@ -93,6 +95,21 @@ function App() {
                       </TeacherRoute>
                     }
                   />
+
+                  <Route
+                    path="/admin/users/create"
+                    element={
+                      <AdminRoute>
+                        <UserCreatePage />
+                      </AdminRoute>
+                    }
+                  />
+
+                  <Route path="/courses/:id/completed" element={
+                      <ProtectedRoute>
+                          <CourseCompletionPage />
+                      </ProtectedRoute>
+                  } />
 
                   <Route
                     path="/courses/:id/students"

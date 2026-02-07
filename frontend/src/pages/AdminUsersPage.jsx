@@ -537,7 +537,7 @@ export default function AdminUsersPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        {/* <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h3 className="text-lg font-bold text-gray-900 mb-4">Быстрые действия</h3>
           <div className="grid grid-cols-2 gap-3">
             <button 
@@ -569,7 +569,7 @@ export default function AdminUsersPage() {
               <div className="text-sm text-gray-500">Статистика активности</div>
             </button>
           </div>
-        </div>
+        </div> */}
       </div>
     </div>
   );
