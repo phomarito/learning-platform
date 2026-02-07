@@ -11,6 +11,7 @@
     "db:push": "npx prisma db push",
     "db:seed": "node prisma/seed.js",
     "seed:full": "node seed-full.js",
+    "seed:courses": "node seed-courses.js",
     "seed:reset": "npx prisma migrate reset --force && node seed-full.js"
   },
   "dependencies": {
